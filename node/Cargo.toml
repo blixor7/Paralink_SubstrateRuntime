@@ -1,16 +1,16 @@
 [package]
-authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
+authors = ['Paralink Network <https://paralink.network>']
 build = 'build.rs'
-description = 'A fresh FRAME-based Substrate node, ready for hacking.'
+description = 'Paralink Substrate Node'
 edition = '2018'
-homepage = 'https://substrate.dev'
+homepage = 'https://paralink.network'
 license = 'Unlicense'
-name = 'node-template'
-repository = 'https://github.com/substrate-developer-hub/substrate-node-template/'
+name = 'paralink-node'
+repository = 'https://github.com/paralink-network/paralink-substrate'
 version = '2.0.0'
 
 [[bin]]
-name = 'node-template'
+name = 'paralink-node'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
@@ -23,7 +23,7 @@ jsonrpc-core = '15.0.0'
 structopt = '0.3.8'
 
 # local dependencies
-node-template-runtime = { path = '../runtime', version = '2.0.0' }
+paralink-runtime = { path = '../runtime', version = '2.0.0' }
 
 # Substrate dependencies
 frame-benchmarking = '2.0.0'
@@ -54,4 +54,4 @@ substrate-frame-rpc-system = '2.0.0'
 
 [features]
 default = []
-runtime-benchmarks = ['node-template-runtime/runtime-benchmarks']
+runtime-benchmarks = ['paralink-runtime/runtime-benchmarks']

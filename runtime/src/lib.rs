@@ -92,8 +92,8 @@ pub mod opaque {
 }
 
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("node-template"),
-	impl_name: create_runtime_str!("node-template"),
+	spec_name: create_runtime_str!("paralink-network"),
+	impl_name: create_runtime_str!("paralink-network"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 1,
