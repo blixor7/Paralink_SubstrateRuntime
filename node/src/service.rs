@@ -43,6 +43,13 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
+	// TODO: Make this configurable
+	// Initialize seed for signing transaction using off-chain workers
+	keystore.write().insert_ephemeral_from_seed_by_type::<paralink_runtime::ocw::crypto::Pair>(
+		"//Alice", paralink_runtime::ocw::KEY_TYPE
+	).expect("Creating key with account Alice should succeed.");
+
+
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
 	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
