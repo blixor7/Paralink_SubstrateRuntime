@@ -1,17 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_std::prelude::*;
 use frame_support::{
 	codec::{Decode, Encode},
 	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::DispatchResult, ensure};
 use frame_system::{self as system, ensure_signed};
-use sp_std::prelude::*;
-// use sp_std::collections::btree_set::BTreeSet;
-
 use sp_runtime::{
 	traits::{Zero},
 	RuntimeDebug,
 };
+
+#[cfg(feature = "std")]
+pub use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod tests;
@@ -25,11 +26,12 @@ pub trait Trait: balances::Trait + system::Trait {
 }
 
 
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug)]
 pub struct Quorum<AccountId, Balance> {
-	members: Vec<AccountId>,
-	balances: Vec<Balance>,
-	creator: AccountId
+	pub members: Vec<AccountId>,
+	pub balances: Vec<Balance>,
+	pub creator: AccountId
 }
 
 pub type QuorumOf<T> = Quorum<<T as system::Trait>::AccountId, <T as balances::Trait>::Balance>;
