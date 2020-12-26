@@ -3504,6 +3504,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-quorum"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-randomness-collective-flip"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3685,6 +3700,7 @@ dependencies = [
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
+ "pallet-quorum",
  "pallet-randomness-collective-flip",
  "pallet-sudo",
  "pallet-template",
@@ -4231,21 +4247,6 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "pin-project-lite",
-]
-
-[[package]]
-name = "quorum"
-version = "2.0.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
