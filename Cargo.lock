@@ -3352,22 +3352,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ocw"
-version = "2.0.0"
-dependencies = [
- "alt_serde",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "parking_lot 0.10.2",
- "serde_json 1.0.44",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "once_cell"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3500,6 +3484,22 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-ocw"
+version = "2.0.0"
+dependencies = [
+ "alt_serde",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "parking_lot 0.10.2",
+ "serde_json 1.0.44",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -3696,10 +3696,10 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "hex-literal",
- "ocw",
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
+ "pallet-ocw",
  "pallet-quorum",
  "pallet-randomness-collective-flip",
  "pallet-sudo",

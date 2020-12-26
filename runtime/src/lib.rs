@@ -42,7 +42,7 @@ pub use frame_support::{
 
 /// Import the template pallet.
 pub use pallet_template;
-pub use ocw;
+pub use pallet_ocw;
 pub use pallet_quorum;
 
 /// An index to a block.
@@ -276,8 +276,8 @@ impl pallet_template::Trait for Runtime {
 ///   inside `create_transaction` function.
 pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 
-impl ocw::Trait for Runtime {
-	type AuthorityId = ocw::crypto::TestAuthId;
+impl pallet_ocw::Trait for Runtime {
+	type AuthorityId = pallet_ocw::crypto::TestAuthId;
 	type Call = Call;
 	type Event = Event;
 }
@@ -366,7 +366,7 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		// Include the custom logic from the template pallet in the runtime.
 		TemplateModule: pallet_template::{Module, Call, Storage, Event<T>},
-		OcwRuntime: ocw::{Module, Call, Storage, Event<T>},
+		OcwRuntime: pallet_ocw::{Module, Call, Storage, Event<T>},
 		RelayerQuorums: pallet_quorum::{Module, Call, Storage, Event<T>},
 	}
 );

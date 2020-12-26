@@ -45,8 +45,8 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 
 	// TODO: Make this configurable
 	// Initialize seed for signing transaction using off-chain workers
-	keystore.write().insert_ephemeral_from_seed_by_type::<paralink_runtime::ocw::crypto::Pair>(
-		"//Alice", paralink_runtime::ocw::KEY_TYPE
+	keystore.write().insert_ephemeral_from_seed_by_type::<paralink_runtime::pallet_ocw::crypto::Pair>(
+		"//Alice", paralink_runtime::pallet_ocw::KEY_TYPE
 	).expect("Creating key with account Alice should succeed.");
 
 
