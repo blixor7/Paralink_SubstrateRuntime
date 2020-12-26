@@ -3,12 +3,11 @@
 use sp_std::prelude::*;
 use frame_support::{
 	codec::{Decode, Encode},
-	traits::{Currency, ReservableCurrency, ExistenceRequirement},
+	traits::{Currency, ReservableCurrency},
 	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::DispatchResult, ensure};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
-	traits::{Zero},
 	RuntimeDebug,
 };
 
@@ -24,23 +23,22 @@ pub const MAX_MEMBERS: usize = 32;
 
 pub trait Trait: balances::Trait + system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-	type Currency: ReservableCurrency<Self::AccountId>;
+	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 }
 
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug)]
-pub struct Quorum<AccountId, Balance> {
+pub struct Quorum<AccountId, BalanceOf> {
 	pub members: Vec<AccountId>,
-	pub balances: Vec<Balance>,
+	pub balances: Vec<BalanceOf>,
 	pub creator: AccountId,
-	pub pendingRewards: Balance,
+	pub pending_rewards: BalanceOf,
 }
 
 
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-pub type QuorumOf<T> = Quorum<<T as system::Trait>::AccountId, <T as balances::Trait>::Balance>;
-// pub type QuorumOf<T> = Quorum<<T as system::Trait>::AccountId, BalanceOf<T>>;
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+pub type QuorumOf<T> = Quorum<<T as system::Trait>::AccountId, BalanceOf<T>>;
 pub type QuorumIndex = u32;
 
 decl_storage! {
@@ -96,7 +94,7 @@ decl_module! {
 				members: vec![],
 				balances: vec![],
 				creator: who.clone(),
-				pendingRewards: 0.into(),
+				pending_rewards: 0.into(),
 			});
 
 			Self::deposit_event(RawEvent::QuorumCreated(index, who));
@@ -126,7 +124,7 @@ decl_module! {
 				Err(index) => {
 					// TODO: trigger pending rewards distribution
 					quorum.members.insert(index, new_member.clone());
-					quorum.balances.insert(index, Zero::zero());
+					quorum.balances.insert(index, 0.into());
 					// Upsert the quorum
 					<Quorums<T>>::insert(&quorum_id, quorum);
 					Self::deposit_event(RawEvent::MemberAdded(quorum_id, new_member));
@@ -151,8 +149,8 @@ decl_module! {
 				Ok(index) => {
 					// TODO: trigger pending rewards distribution
 					let balance = quorum.balances.get(index).unwrap();
-					if *balance > T::Balance::from(0)  {
-						// TODO: transfer the balance to the member
+					if *balance > BalanceOf::<T>::from(0) {
+						T::Currency::deposit_into_existing(&who, *balance)?;
 					}
 					quorum.members.remove(index);
 					quorum.balances.remove(index);
@@ -178,8 +176,8 @@ decl_module! {
 				Ok(index) => {
 					// TODO: trigger pending rewards distribution
 					let balance = quorum.balances.get(index).unwrap();
-					if *balance > 0.into()  {
-						T::Currency::deposit_into_existing(&who, balance.into())?;
+					if *balance > BalanceOf::<T>::from(0) {
+						T::Currency::deposit_into_existing(&who, *balance)?;
 					}
 					quorum.members.remove(index);
 					quorum.balances.remove(index);
@@ -197,8 +195,8 @@ decl_module! {
 // private helper functions
 impl<T: Trait> Module<T> {
 
-	/// Distribute pendingRewards between quorum members
-	fn refresh_quorum_balances(quorum_id: QuorumIndex) {
+	/// Distribute pending_rewards between quorum members
+	fn distribute_pending_rewards(quorum_id: QuorumIndex) {
 		todo!();
 	}
 }
