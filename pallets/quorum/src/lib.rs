@@ -15,6 +15,7 @@ use sp_runtime::{
 pub use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
+mod mock;
 mod tests;
 
 /// A maximum number of members.
