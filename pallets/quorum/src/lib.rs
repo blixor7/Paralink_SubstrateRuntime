@@ -80,7 +80,7 @@ decl_module! {
 
 		/// Create a new quorum
 		#[weight = 10_000]
-		fn create(origin) -> DispatchResult {
+		pub fn create(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// TODO: add a minimum fee that is burned
 
