@@ -105,11 +105,9 @@ decl_module! {
 		#[weight = 10_000]
 		pub fn add_member(origin, quorum_id: QuorumIndex, new_member: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let mut quorum = Self::find_quorum(quorum_id)?;
 
-			ensure!(<Quorums<T>>::contains_key(&quorum_id), Error::<T>::InvalidQuorum);
-			let mut quorum = <Quorums<T>>::get(&quorum_id);
-
-			// only quorum creator can add new members (for now)
+			// only quorum creator can add/remove new members (for now)
 			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
 
 			ensure!(quorum.members.len() < MAX_MEMBERS, Error::<T>::MembershipLimitReached);
@@ -137,66 +135,71 @@ decl_module! {
 		#[weight = 10_000]
 		pub fn remove_member(origin, quorum_id: QuorumIndex, remove_member: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let (mut quorum, index) = Self::find_quorum_member(quorum_id, &who)?;
 
-			ensure!(<Quorums<T>>::contains_key(&quorum_id), Error::<T>::InvalidQuorum);
-			let mut quorum = <Quorums<T>>::get(&quorum_id);
-
-			// only quorum creator can add new members (for now)
+			// only quorum creator can add/remove new members (for now)
 			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
 
-			match quorum.members.binary_search(&remove_member) {
-				// If the search succeeds, the caller is a member; remove it
-				Ok(index) => {
-					// TODO: trigger pending rewards distribution
-					let balance = quorum.balances.get(index).unwrap();
-					if *balance > BalanceOf::<T>::from(0) {
-						T::Currency::deposit_into_existing(&who, *balance)?;
-					}
-					quorum.members.remove(index);
-					quorum.balances.remove(index);
-					<Quorums<T>>::insert(&quorum_id, quorum);
-					Self::deposit_event(RawEvent::MemberRemoved(quorum_id, remove_member));
-					Ok(())
-				},
-				Err(_) => Err(Error::<T>::NotMember.into()),
+			// TODO: trigger pending rewards distribution
+			let balance = quorum.balances.get(index).unwrap();
+			if *balance > BalanceOf::<T>::from(0) {
+				T::Currency::deposit_into_existing(&who, *balance)?;
 			}
+			quorum.members.remove(index);
+			quorum.balances.remove(index);
+			<Quorums<T>>::insert(&quorum_id, quorum);
+			Self::deposit_event(RawEvent::MemberRemoved(quorum_id, remove_member));
+			Ok(())
 		}
 
 		/// Member leaves
 		#[weight = 10_000]
 		pub fn leave(origin, quorum_id: QuorumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let (mut quorum, index) = Self::find_quorum_member(quorum_id, &who)?;
 
-			ensure!(<Quorums<T>>::contains_key(&quorum_id), Error::<T>::InvalidQuorum);
-			let mut quorum = <Quorums<T>>::get(&quorum_id);
-
-			// We have to find out if the member exists in the sorted vec, and, if so, where.
-			match quorum.members.binary_search(&who) {
-				// If the search succeeds, the caller is a member, so remove her
-				Ok(index) => {
-					// TODO: trigger pending rewards distribution
-					let balance = quorum.balances.get(index).unwrap();
-					if *balance > BalanceOf::<T>::from(0) {
-						T::Currency::deposit_into_existing(&who, *balance)?;
-					}
-					quorum.members.remove(index);
-					quorum.balances.remove(index);
-					<Quorums<T>>::insert(&quorum_id, quorum);
-					Self::deposit_event(RawEvent::MemberRemoved(quorum_id, who));
-					Ok(())
-				},
-				Err(_) => Err(Error::<T>::NotMember.into()),
+			// TODO: trigger pending rewards distribution
+			let balance = quorum.balances.get(index).unwrap();
+			if *balance > BalanceOf::<T>::from(0) {
+				T::Currency::deposit_into_existing(&who, *balance)?;
 			}
+			quorum.members.remove(index);
+			quorum.balances.remove(index);
+			<Quorums<T>>::insert(&quorum_id, quorum);
+			Self::deposit_event(RawEvent::MemberRemoved(quorum_id, who));
+			Ok(())
 		}
 
 	}
 }
 
-// private helper functions
 impl<T: Trait> Module<T> {
 
+	/// Find a quorum
+	pub fn find_quorum(quorum_id: QuorumIndex) ->
+		Result<Quorum<T::AccountId, BalanceOf<T>>, Error<T>>
+	{
+		ensure!(<Quorums<T>>::contains_key(&quorum_id), Error::<T>::InvalidQuorum);
+		let quorum = <Quorums<T>>::get(&quorum_id);
+		Ok(quorum)
+	}
+
+	/// Find and return a quorum and the location of its member
+	pub fn find_quorum_member(quorum_id: QuorumIndex, who: &T::AccountId) ->
+		Result<(Quorum<T::AccountId, BalanceOf<T>>, usize), Error<T>>
+	{
+		let quorum = Self::find_quorum(quorum_id)?;
+
+		match quorum.members.binary_search(&who) {
+			Ok(index) => {
+				Ok((quorum, index))
+			},
+			Err(_) => Err(Error::<T>::NotMember.into()),
+		}
+	}
+
 	/// Distribute pending_rewards between quorum members
-	fn distribute_pending_rewards(quorum_id: QuorumIndex) {
+	fn _distribute_pending_rewards() {
 		todo!();
 	}
 }
