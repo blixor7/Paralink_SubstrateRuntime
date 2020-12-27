@@ -136,7 +136,7 @@ decl_module! {
 		#[weight = 10_000]
 		pub fn remove_member(origin, quorum_id: QuorumIndex, remove_member: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (mut quorum, index) = Self::find_quorum_member(quorum_id, &who)?;
+			let (mut quorum, index) = Self::find_quorum_member(quorum_id, remove_member.clone())?;
 
 			// only quorum creator can add/remove new members (for now)
 			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
@@ -157,7 +157,7 @@ decl_module! {
 		#[weight = 10_000]
 		pub fn leave(origin, quorum_id: QuorumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (mut quorum, index) = Self::find_quorum_member(quorum_id, &who)?;
+			let (mut quorum, index) = Self::find_quorum_member(quorum_id, who.clone())?;
 
 			// TODO: trigger pending rewards distribution
 			let balance = quorum.balances.get(index).unwrap();
@@ -186,7 +186,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Find and return a quorum and the location of its member
-	pub fn find_quorum_member(quorum_id: QuorumIndex, who: &T::AccountId) ->
+	pub fn find_quorum_member(quorum_id: QuorumIndex, who: T::AccountId) ->
 		Result<(Quorum<T::AccountId, BalanceOf<T>>, usize), Error<T>>
 	{
 		let quorum = Self::find_quorum(quorum_id)?;
