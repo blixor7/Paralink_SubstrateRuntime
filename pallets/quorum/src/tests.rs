@@ -8,92 +8,92 @@ use mock::{Runtime, ExtBuilder, Origin, QuorumModule, System, TestEvent};
 
 #[test]
 fn test_create_quorum() {
-    ExtBuilder::default().build().execute_with(|| {
-        assert_eq!(QuorumCount::get(), 0);
-        assert_ok!(QuorumModule::create(Origin::signed(1)));
-        assert_eq!(QuorumCount::get(), 1);
-    });
+	ExtBuilder::default().build().execute_with(|| {
+		assert_eq!(QuorumCount::get(), 0);
+		assert_ok!(QuorumModule::create(Origin::signed(1)));
+		assert_eq!(QuorumCount::get(), 1);
+	});
 }
 
 #[test]
 fn test_add_remove_member() {
-    ExtBuilder::default().build().execute_with(|| {
-        assert_ok!(QuorumModule::create(Origin::signed(1)));
-        let quorum_id = 1 as u32;
+	ExtBuilder::default().build().execute_with(|| {
+		assert_ok!(QuorumModule::create(Origin::signed(1)));
+		let quorum_id = 1 as u32;
 
-        // add alice and verify
-        let alice = 2 as u128;
-        assert_ok!(QuorumModule::add_member(Origin::signed(1), quorum_id, alice));
-        assert_ok!(QuorumModule::find_quorum_member(quorum_id, alice));
-        let (quorum, index) = QuorumModule::find_quorum_member(quorum_id, alice).unwrap();
-        assert!(quorum.members.len() == 1);
-        assert!(index == 0);
+		// add alice and verify
+		let alice = 2 as u128;
+		assert_ok!(QuorumModule::add_member(Origin::signed(1), quorum_id, alice));
+		assert_ok!(QuorumModule::find_quorum_member(quorum_id, alice));
+		let (quorum, index) = QuorumModule::find_quorum_member(quorum_id, alice).unwrap();
+		assert!(quorum.members.len() == 1);
+		assert!(index == 0);
 
-        // cannot add alice twice
-        assert_err!(
-            QuorumModule::add_member(Origin::signed(1), quorum_id, alice),
-            Error::<Runtime>::AlreadyMember
-        );
+		// cannot add alice twice
+		assert_err!(
+			QuorumModule::add_member(Origin::signed(1), quorum_id, alice),
+			Error::<Runtime>::AlreadyMember
+		);
 
-        // add bob
-        let bob = 3 as u128;
-        assert_ok!(QuorumModule::add_member(Origin::signed(1), quorum_id, bob));
-        assert_ok!(QuorumModule::find_quorum_member(quorum_id, bob));
-        let (quorum, index) = QuorumModule::find_quorum_member(quorum_id, bob).unwrap();
-        assert!(quorum.members.len() == 2);
-        assert!(index == 1);
+		// add bob
+		let bob = 3 as u128;
+		assert_ok!(QuorumModule::add_member(Origin::signed(1), quorum_id, bob));
+		assert_ok!(QuorumModule::find_quorum_member(quorum_id, bob));
+		let (quorum, index) = QuorumModule::find_quorum_member(quorum_id, bob).unwrap();
+		assert!(quorum.members.len() == 2);
+		assert!(index == 1);
 
-        // alice gets kicked
-        assert_ok!(QuorumModule::remove_member(Origin::signed(1), quorum_id, alice));
-        let quorum = QuorumModule::find_quorum(quorum_id).unwrap();
-        assert!(quorum.members.len() == 1);
-        assert!(!quorum.members.contains(&alice));
+		// alice gets kicked
+		assert_ok!(QuorumModule::remove_member(Origin::signed(1), quorum_id, alice));
+		let quorum = QuorumModule::find_quorum(quorum_id).unwrap();
+		assert!(quorum.members.len() == 1);
+		assert!(!quorum.members.contains(&alice));
 
-        // bob's index has changed
-        let (quorum, index) = QuorumModule::find_quorum_member(quorum_id, bob).unwrap();
-        assert!(index == 0);
+		// bob's index has changed
+		let (quorum, index) = QuorumModule::find_quorum_member(quorum_id, bob).unwrap();
+		assert!(index == 0);
 
-        // TODO
-        // test rewards distribution on join
-        // test rewards distribution and withdrawal on kick
-    });
+		// TODO
+		// test rewards distribution on join
+		// test rewards distribution and withdrawal on kick
+	});
 }
 
 #[test]
 fn test_leave() {
-    ExtBuilder::default().build().execute_with(|| {
-        assert_ok!(QuorumModule::create(Origin::signed(1)));
-        let quorum_id = 1 as u32;
+	ExtBuilder::default().build().execute_with(|| {
+		assert_ok!(QuorumModule::create(Origin::signed(1)));
+		let quorum_id = 1 as u32;
 
-        // add alice and verify
-        let alice = 3 as u128;
-        assert_ok!(QuorumModule::add_member(Origin::signed(1), quorum_id, alice));
+		// add alice and verify
+		let alice = 3 as u128;
+		assert_ok!(QuorumModule::add_member(Origin::signed(1), quorum_id, alice));
 
-        // alice leaves
-        assert_ok!(QuorumModule::leave(Origin::signed(alice), quorum_id));
-        let quorum = QuorumModule::find_quorum(quorum_id).unwrap();
-        assert!(quorum.members.len() == 0);
+		// alice leaves
+		assert_ok!(QuorumModule::leave(Origin::signed(alice), quorum_id));
+		let quorum = QuorumModule::find_quorum(quorum_id).unwrap();
+		assert!(quorum.members.len() == 0);
 
-        // TODO
-        // test rewards distribution and withdrawal on leave
-    });
+		// TODO
+		// test rewards distribution and withdrawal on leave
+	});
 }
 
 
 #[test]
 fn test_unauthorized() {
-    ExtBuilder::default().build().execute_with(|| {
-        // alice owns the quorum
-        assert_ok!(QuorumModule::create(Origin::signed(1)));
-        // so bob can't add things to it
-        assert_err!(
-            QuorumModule::add_member(Origin::signed(2), 1 as u32, 2 as u128),
-            Error::<Runtime>::Unauthorized
-        );
-        // only alice can
-        assert_ok!(QuorumModule::add_member(Origin::signed(1), 1 as u32, 2 as u128));
-        // test removal endpoint too
-        assert!(QuorumModule::remove_member(Origin::signed(2), 1 as u32, 2 as u128).is_err());
-        assert_ok!(QuorumModule::remove_member(Origin::signed(1), 1 as u32, 2 as u128));
-    });
+	ExtBuilder::default().build().execute_with(|| {
+		// alice owns the quorum
+		assert_ok!(QuorumModule::create(Origin::signed(1)));
+		// so bob can't add things to it
+		assert_err!(
+			QuorumModule::add_member(Origin::signed(2), 1 as u32, 2 as u128),
+			Error::<Runtime>::Unauthorized
+		);
+		// only alice can
+		assert_ok!(QuorumModule::add_member(Origin::signed(1), 1 as u32, 2 as u128));
+		// test removal endpoint too
+		assert!(QuorumModule::remove_member(Origin::signed(2), 1 as u32, 2 as u128).is_err());
+		assert_ok!(QuorumModule::remove_member(Origin::signed(1), 1 as u32, 2 as u128));
+	});
 }

@@ -71,20 +71,20 @@ pub mod crypto {
 	// implemented for ocw-runtime
 	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
 		for TestAuthId
-	{
-		type RuntimeAppPublic = Public;
-		type GenericSignature = sp_core::sr25519::Signature;
-		type GenericPublic = sp_core::sr25519::Public;
-	}
+		{
+			type RuntimeAppPublic = Public;
+			type GenericSignature = sp_core::sr25519::Signature;
+			type GenericPublic = sp_core::sr25519::Public;
+		}
 
 	// implemented for mock runtime in test
 	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
 		for TestAuthId
-	{
-		type RuntimeAppPublic = Public;
-		type GenericSignature = sp_core::sr25519::Signature;
-		type GenericPublic = sp_core::sr25519::Public;
-	}
+		{
+			type RuntimeAppPublic = Public;
+			type GenericSignature = sp_core::sr25519::Signature;
+			type GenericPublic = sp_core::sr25519::Public;
+		}
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -154,10 +154,10 @@ decl_event!(
 	pub enum Event<T>
 	where
 		AccountId = <T as system::Trait>::AccountId,
-	{
-		/// Event generated when a new number is accepted to contribute to the average.
-		NewNumber(Option<AccountId>, u64),
-	}
+		{
+			/// Event generated when a new number is accepted to contribute to the average.
+			NewNumber(Option<AccountId>, u64),
+		}
 );
 
 decl_error! {
@@ -201,11 +201,11 @@ decl_module! {
 			const TRANSACTION_TYPES: usize = 2;
 			let result = match block_number.try_into()
 				.map_or(TRANSACTION_TYPES, |bn| bn % TRANSACTION_TYPES)
-			{
-				0 => Self::offchain_signed_tx(block_number),
-				1 => Self::http_test_stub(),
-				_ => Err(Error::<T>::UnknownOffchainMux),
-			};
+				{
+					0 => Self::offchain_signed_tx(block_number),
+					1 => Self::http_test_stub(),
+					_ => Err(Error::<T>::UnknownOffchainMux),
+				};
 
 			if let Err(e) = result {
 				debug::error!("offchain_worker error: {:?}", e);
@@ -371,6 +371,6 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> rt_offchain::storage_lock::BlockNumberProvider for Module<T> {
 	type BlockNumber = T::BlockNumber;
 	fn current_block_number() -> Self::BlockNumber {
-	  <frame_system::Module<T>>::block_number()
+		<frame_system::Module<T>>::block_number()
 	}
 }

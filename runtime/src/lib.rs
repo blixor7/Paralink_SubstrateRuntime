@@ -345,7 +345,7 @@ where
 
 impl pallet_quorum::Trait for Runtime {
 	type Event = Event;
-    type Currency = pallet_balances::Module<Runtime>;
+	type Currency = Balances;
 }
 // ---------------------- End of Quorum config ------------------------
 
