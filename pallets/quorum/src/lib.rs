@@ -18,9 +18,9 @@ pub use serde::{Deserialize, Serialize};
 mod mock;
 mod tests;
 
-/// A maximum number of members.
-/// When membership reaches this number, no new members may join.
-pub const MAX_MEMBERS: usize = 32;
+/// A maximum number of relayers.
+/// When membership reaches this number, no new relayers may join.
+pub const MAX_RELAYERS: usize = 32;
 
 pub trait Trait: balances::Trait + system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -31,10 +31,11 @@ pub trait Trait: balances::Trait + system::Trait {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug)]
 pub struct Quorum<AccountId, BalanceOf> {
-	pub members: Vec<AccountId>,
+	pub relayers: Vec<AccountId>,
 	pub balances: Vec<BalanceOf>,
 	pub creator: AccountId,
 	pub pending_rewards: BalanceOf,
+	pub fee: BalanceOf,
 }
 
 
@@ -57,16 +58,16 @@ decl_event!(
 		AccountId = <T as system::Trait>::AccountId,
 		{
 			QuorumCreated(QuorumIndex, AccountId),
-			MemberAdded(QuorumIndex, AccountId),
-			MemberRemoved(QuorumIndex, AccountId),
+			RelayerAdded(QuorumIndex, AccountId),
+			RelayerRemoved(QuorumIndex, AccountId),
 		}
 );
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-		AlreadyMember,
-		NotMember,
-		MembershipLimitReached,
+		AlreadyRelayer,
+		NotRelayer,
+		RelayerLimitReached,
 		InvalidQuorum,
 		Unauthorized,
 	}
@@ -92,53 +93,54 @@ decl_module! {
 
 			// Create a new quorum
 			<Quorums<T>>::insert(index, Quorum {
-				members: vec![],
+				relayers: vec![],
 				balances: vec![],
 				creator: who.clone(),
 				pending_rewards: 0.into(),
+				fee: 0.into(),
 			});
 
 			Self::deposit_event(RawEvent::QuorumCreated(index, who));
 			Ok(())
 		}
 
-		/// Creator adds a member to the membership set unless the max is reached
+		/// Creator adds a relayer to the relayers set unless the max is reached
 		#[weight = 10_000]
-		pub fn add_member(origin, quorum_id: QuorumIndex, new_member: T::AccountId) -> DispatchResult {
+		pub fn add_relayer(origin, quorum_id: QuorumIndex, relayer: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut quorum = Self::find_quorum(quorum_id)?;
 
-			// only quorum creator can add/remove new members (for now)
+			// only quorum creator can add/remove new relayers (for now)
 			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
 
-			ensure!(quorum.members.len() < MAX_MEMBERS, Error::<T>::MembershipLimitReached);
+			ensure!(quorum.relayers.len() < MAX_RELAYERS, Error::<T>::RelayerLimitReached);
 
 			// Avoid duplicates. Because the list is always ordered, we can
 			// leverage the binary search which makes this check O(log n).
-			match quorum.members.binary_search(&new_member) {
-				// If the search succeeds, the caller is already a member, so just return
-				Ok(_) => Err(Error::<T>::AlreadyMember.into()),
-				// If the search fails, the caller is not a member and we learned the index where
+			match quorum.relayers.binary_search(&relayer) {
+				// If the search succeeds, the caller is already a relayer, so just return
+				Ok(_) => Err(Error::<T>::AlreadyRelayer.into()),
+				// If the search fails, the caller is not a relayer and we learned the index where
 				// they should be inserted
 				Err(index) => {
 					// TODO: trigger pending rewards distribution
-					quorum.members.insert(index, new_member.clone());
+					quorum.relayers.insert(index, relayer.clone());
 					quorum.balances.insert(index, 0.into());
 					// Upsert the quorum
 					<Quorums<T>>::insert(&quorum_id, quorum);
-					Self::deposit_event(RawEvent::MemberAdded(quorum_id, new_member));
+					Self::deposit_event(RawEvent::RelayerAdded(quorum_id, relayer));
 					Ok(())
 				}
 			}
 		}
 
-		/// Creator removes a member.
+		/// Creator removes a relayer.
 		#[weight = 10_000]
-		pub fn remove_member(origin, quorum_id: QuorumIndex, remove_member: T::AccountId) -> DispatchResult {
+		pub fn remove_relayer(origin, quorum_id: QuorumIndex, relayer: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (mut quorum, index) = Self::find_quorum_member(quorum_id, remove_member.clone())?;
+			let (mut quorum, index) = Self::find_quorum_relayer(quorum_id, relayer.clone())?;
 
-			// only quorum creator can add/remove new members (for now)
+			// only quorum creator can add/remove new relayers (for now)
 			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
 
 			// TODO: trigger pending rewards distribution
@@ -146,28 +148,28 @@ decl_module! {
 			if *balance > BalanceOf::<T>::from(0) {
 				T::Currency::deposit_into_existing(&who, *balance)?;
 			}
-			quorum.members.remove(index);
+			quorum.relayers.remove(index);
 			quorum.balances.remove(index);
 			<Quorums<T>>::insert(&quorum_id, quorum);
-			Self::deposit_event(RawEvent::MemberRemoved(quorum_id, remove_member));
+			Self::deposit_event(RawEvent::RelayerRemoved(quorum_id, relayer));
 			Ok(())
 		}
 
-		/// Member leaves
+		/// Relayer leaves
 		#[weight = 10_000]
 		pub fn leave(origin, quorum_id: QuorumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (mut quorum, index) = Self::find_quorum_member(quorum_id, who.clone())?;
+			let (mut quorum, index) = Self::find_quorum_relayer(quorum_id, who.clone())?;
 
 			// TODO: trigger pending rewards distribution
 			let balance = quorum.balances.get(index).unwrap();
 			if *balance > BalanceOf::<T>::from(0) {
 				T::Currency::deposit_into_existing(&who, *balance)?;
 			}
-			quorum.members.remove(index);
+			quorum.relayers.remove(index);
 			quorum.balances.remove(index);
 			<Quorums<T>>::insert(&quorum_id, quorum);
-			Self::deposit_event(RawEvent::MemberRemoved(quorum_id, who));
+			Self::deposit_event(RawEvent::RelayerRemoved(quorum_id, who));
 			Ok(())
 		}
 
@@ -185,21 +187,21 @@ impl<T: Trait> Module<T> {
 		Ok(quorum)
 	}
 
-	/// Find and return a quorum and the location of its member
-	pub fn find_quorum_member(quorum_id: QuorumIndex, who: T::AccountId) ->
+	/// Find and return a quorum and the location of its relayer
+	pub fn find_quorum_relayer(quorum_id: QuorumIndex, relayer: T::AccountId) ->
 		Result<(Quorum<T::AccountId, BalanceOf<T>>, usize), Error<T>>
 	{
 		let quorum = Self::find_quorum(quorum_id)?;
 
-		match quorum.members.binary_search(&who) {
+		match quorum.relayers.binary_search(&relayer) {
 			Ok(index) => {
 				Ok((quorum, index))
 			},
-			Err(_) => Err(Error::<T>::NotMember.into()),
+			Err(_) => Err(Error::<T>::NotRelayer.into()),
 		}
 	}
 
-	/// Distribute pending_rewards between quorum members
+	/// Distribute pending_rewards between quorum relayers
 	fn _distribute_pending_rewards() {
 		todo!();
 	}
