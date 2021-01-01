@@ -18,12 +18,13 @@ fn test_create_quorum() {
 #[test]
 fn test_add_remove_relayer() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert_ok!(QuorumModule::create(Origin::signed(1)));
 		let quorum_id = 1 as u32;
+		let alice = 1 as u128;
+		let bob = 2 as u128;
+		assert_ok!(QuorumModule::create(Origin::signed(alice)));
 
 		// add alice and verify
-		let alice = 2 as u128;
-		assert_ok!(QuorumModule::add_relayer(Origin::signed(1), quorum_id, alice));
+		assert_ok!(QuorumModule::add_relayer(Origin::signed(alice), quorum_id, alice));
 		assert_ok!(QuorumModule::find_quorum_relayer(quorum_id, alice));
 		let (quorum, index) = QuorumModule::find_quorum_relayer(quorum_id, alice).unwrap();
 		assert!(quorum.relayers.len() == 1);
@@ -31,20 +32,19 @@ fn test_add_remove_relayer() {
 
 		// cannot add alice twice
 		assert_err!(
-			QuorumModule::add_relayer(Origin::signed(1), quorum_id, alice),
+			QuorumModule::add_relayer(Origin::signed(alice), quorum_id, alice),
 			Error::<Runtime>::AlreadyRelayer
 		);
 
 		// add bob
-		let bob = 3 as u128;
-		assert_ok!(QuorumModule::add_relayer(Origin::signed(1), quorum_id, bob));
+		assert_ok!(QuorumModule::add_relayer(Origin::signed(alice), quorum_id, bob));
 		assert_ok!(QuorumModule::find_quorum_relayer(quorum_id, bob));
 		let (quorum, index) = QuorumModule::find_quorum_relayer(quorum_id, bob).unwrap();
 		assert!(quorum.relayers.len() == 2);
 		assert!(index == 1);
 
 		// alice gets kicked
-		assert_ok!(QuorumModule::remove_relayer(Origin::signed(1), quorum_id, alice));
+		assert_ok!(QuorumModule::remove_relayer(Origin::signed(alice), quorum_id, alice));
 		let quorum = QuorumModule::find_quorum(quorum_id).unwrap();
 		assert!(quorum.relayers.len() == 1);
 		assert!(!quorum.relayers.contains(&alice));
@@ -62,12 +62,12 @@ fn test_add_remove_relayer() {
 #[test]
 fn test_leave() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert_ok!(QuorumModule::create(Origin::signed(1)));
 		let quorum_id = 1 as u32;
+		let alice = 3 as u128;
+		assert_ok!(QuorumModule::create(Origin::signed(alice)));
 
 		// add alice and verify
-		let alice = 3 as u128;
-		assert_ok!(QuorumModule::add_relayer(Origin::signed(1), quorum_id, alice));
+		assert_ok!(QuorumModule::add_relayer(Origin::signed(alice), quorum_id, alice));
 
 		// alice leaves
 		assert_ok!(QuorumModule::leave(Origin::signed(alice), quorum_id));
@@ -83,17 +83,20 @@ fn test_leave() {
 #[test]
 fn test_unauthorized() {
 	ExtBuilder::default().build().execute_with(|| {
+		let quorum_id = 1 as u32;
+		let alice = 1 as u128;
+		let bob = 2 as u128;
 		// alice owns the quorum
-		assert_ok!(QuorumModule::create(Origin::signed(1)));
-		// so bob can't add things to it
+		assert_ok!(QuorumModule::create(Origin::signed(alice)));
+		// so bob can't add relayers
 		assert_err!(
-			QuorumModule::add_relayer(Origin::signed(2), 1 as u32, 2 as u128),
+			QuorumModule::add_relayer(Origin::signed(bob), quorum_id, bob),
 			Error::<Runtime>::Unauthorized
 		);
-		// only alice can
-		assert_ok!(QuorumModule::add_relayer(Origin::signed(1), 1 as u32, 2 as u128));
-		// test removal endpoint too
-		assert!(QuorumModule::remove_relayer(Origin::signed(2), 1 as u32, 2 as u128).is_err());
-		assert_ok!(QuorumModule::remove_relayer(Origin::signed(1), 1 as u32, 2 as u128));
+		// only alice can add relayers
+		assert_ok!(QuorumModule::add_relayer(Origin::signed(alice), quorum_id, bob));
+		// test removal
+		assert!(QuorumModule::remove_relayer(Origin::signed(bob), quorum_id, bob).is_err());
+		assert_ok!(QuorumModule::remove_relayer(Origin::signed(alice), quorum_id, bob));
 	});
 }
