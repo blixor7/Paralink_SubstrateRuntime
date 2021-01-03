@@ -84,7 +84,6 @@ fn test_add_remove_user() {
 	ExtBuilder::default().build().execute_with(|| {
 		let quorum_id = 1 as u32;
 		let alice = 1 as u128;
-		let bob = 2 as u128;
 		assert_ok!(QuorumModule::create(Origin::signed(alice), 0, true));
 
 		// add alice and verify
@@ -96,6 +95,36 @@ fn test_add_remove_user() {
 		// alice gets kicked
 		assert_ok!(QuorumModule::remove_user(Origin::signed(alice), quorum_id, alice));
 		assert!(!QuorumModule::is_quorum_user(quorum_id, alice));
+	});
+}
+
+#[test]
+fn test_request_expires() {
+	ExtBuilder::default().build().execute_with(|| {
+		let quorum_id = 1 as u32;
+		let request_id = 1 as u32;
+		let alice = 1 as u128;
+		let valid_period = 10 as u32;
+		let fee = 100 as u64;
+		assert_ok!(QuorumModule::create(Origin::signed(alice), fee.into(), false));
+
+		// new request is made
+		assert_ok!(
+			QuorumModule::request(
+				Origin::signed(alice),
+				quorum_id,
+				[0; 32],
+				fee.into(),
+				valid_period,
+			)
+		);
+		assert_ok!(QuorumModule::find_request(request_id));
+
+		// TODO check that fee was paid
+
+		// TODO: advance x blocks, check that request was invalidated
+		// skip_blocks(valid_period + 1);
+		// assert!(QuorumModule::find_request(request_id).is_err());
 	});
 }
 
@@ -131,3 +160,11 @@ fn test_unauthorized() {
 		);
 	});
 }
+
+
+// fn skip_blocks(n: u32) {
+// 	for _ in 0..n {
+// 		QuorumModule::on_finalize(System::block_number());
+// 		System::set_block_number(System::block_number() + 1);
+// 	}
+// }
