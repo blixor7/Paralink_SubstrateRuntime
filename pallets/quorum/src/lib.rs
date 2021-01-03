@@ -25,7 +25,7 @@ pub const MIN_VALID_PERIOD: u32 = 10;
 /// For how many blocks is the longest pending request valid
 pub const MAX_VALID_PERIOD: u32 = 100;
 /// How much does it cost to create a new quorum
-pub const QUORUM_CREATION_FEE: u128 = 0;
+pub const QUORUM_CREATION_FEE: u32 = 1;
 
 pub trait Trait: balances::Trait + system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -80,7 +80,8 @@ pub struct Request<AccountId, BalanceOf, BlockNumber> {
 	// PQL address
 	// relayer answers
 	// min participation
-	// validation rules
+	// validation rule
+	// aggregation rule
 	// callback
 	// callback status
 }
@@ -158,20 +159,26 @@ decl_module! {
 		pub fn create(origin, min_fee: BalanceOf<T>, members_only: bool) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
+			// Burn a quorum creation fee
+			let fee = BalanceOf::<T>::from(QUORUM_CREATION_FEE);
+			if fee > BalanceOf::<T>::from(0) {
+				T::Currency::withdraw(
+					&who, fee,
+					WithdrawReasons::none(),
+					ExistenceRequirement::KeepAlive)?;
+			}
+
 			// Safely update the quorum index
 			let index = QuorumCount::get()
 				.checked_add(1)
 				.ok_or("quorum index overflow")?;
 			QuorumCount::put(index);
 
-			// TODO: add a minimum fee that is burned
-
+			// Create a new quorum
 			let membership = match members_only {
 				true => Membership::Whitelist,
 				false => Membership::Everyone,
 			};
-
-			// Create a new quorum
 			<Quorums<T>>::insert(index, Quorum {
 				relayers: vec![],
 				balances: vec![],
@@ -295,7 +302,7 @@ decl_module! {
 		pub fn request(
 			origin,
 			quorum_id: QuorumIndex,
-			ipfs_hash: [u8; 32], // TODO: should this be H256?
+			ipfs_hash: [u8; 32], // TODO: should this be sp_core::H256?
 			fee: BalanceOf<T>,
 			valid_period: u32,) -> DispatchResult
 		{
@@ -306,6 +313,8 @@ decl_module! {
 			if quorum.membership == Membership::Whitelist {
 				ensure!(<QuorumUsers<T>>::contains_key(quorum_id, &user), Error::<T>::NotUser);
 			}
+
+			// TODO: check validation rules (ie. min_relayers)
 
 			// check valid period
 			ensure!(
@@ -328,7 +337,6 @@ decl_module! {
 			// store the request
 			let request_id = MaxRequestId::get().wrapping_add(1);
 			MaxRequestId::put(&request_id);
-
 			<Requests<T>>::insert(&request_id, Request {
 				user: user.clone(),
 				quorum_id,
@@ -343,12 +351,13 @@ decl_module! {
 
 		/// Block post-processing hook
 		fn on_finalize(n: T::BlockNumber) {
-			// cleanup expired requests
 			for (request_id, request) in Requests::<T>::iter() {
+				// cleanup expired requests
 				if n > request.valid_till {
 					Requests::<T>::remove(request_id);
 					Self::deposit_event(RawEvent::ExpiredRequest(request_id));
 				}
+				// TODO: finalize requests with n/m answers
 			}
 		}
 
@@ -394,9 +403,14 @@ impl<T: Trait> Module<T> {
 		<QuorumUsers<T>>::contains_key(quorum_id, &user)
 	}
 
-
 	/// Distribute pending_rewards between quorum relayers
 	fn _distribute_pending_rewards() {
 		todo!();
 	}
+
+	// just for testing
+	pub fn balance_of(user: &T::AccountId) -> BalanceOf<T> {
+		T::Currency::total_balance(&user)
+	}
+
 }

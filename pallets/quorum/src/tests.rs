@@ -2,16 +2,44 @@
 
 use super::*;
 use frame_support::{assert_noop, assert_ok, assert_err};
-use sp_runtime::{traits::BadOrigin, FixedPointNumber};
+use sp_runtime::{traits::BadOrigin};
 
-use mock::{Runtime, ExtBuilder, Origin, QuorumModule, System, TestEvent};
+use mock::{
+	System, Runtime, ExtBuilder, Origin,
+	QuorumModule, PalletBalances,
+	TestEvent,
+};
+
+#[test]
+fn test_ext_builder() {
+	ExtBuilder::default().build().execute_with(|| {
+		// check that alice has injected funds
+		let alice = 1 as u128;
+		let balance = PalletBalances::total_balance(&alice);
+		assert_eq!(balance, 10_000 as u64);
+
+		// check alice balance from QuorumModule::Currency
+		let balance = QuorumModule::balance_of(&alice);
+		assert_eq!(balance, 10_000 as u64);
+
+		// check total issuance
+		assert_eq!(PalletBalances::total_issuance(), 40_000 as u64);
+	});
+}
 
 #[test]
 fn test_create_quorum() {
 	ExtBuilder::default().build().execute_with(|| {
+		let alice = 1 as u128;
+		let nobody = 42 as u128;
+
+		// alice has enough funds for the fee
 		assert_eq!(QuorumCount::get(), 0);
-		assert_ok!(QuorumModule::create(Origin::signed(1), 0, false));
+		assert_ok!(QuorumModule::create(Origin::signed(alice), 0, false));
 		assert_eq!(QuorumCount::get(), 1);
+
+		// nobody does not
+		assert!(QuorumModule::create(Origin::signed(nobody), 0, false).is_err());
 	});
 }
 
@@ -63,7 +91,7 @@ fn test_add_remove_relayer() {
 fn test_leave_quorum() {
 	ExtBuilder::default().build().execute_with(|| {
 		let quorum_id = 1 as u32;
-		let alice = 3 as u128;
+		let alice = 1 as u128;
 		assert_ok!(QuorumModule::create(Origin::signed(alice), 0, false));
 
 		// add alice and verify
@@ -98,6 +126,36 @@ fn test_add_remove_user() {
 	});
 }
 
+
+#[test]
+fn test_request() {
+	ExtBuilder::default().build().execute_with(|| {
+		let quorum_id = 1 as u32;
+		let request_id = 1 as u32;
+		let alice = 1 as u128;
+		let valid_period = 10 as u32;
+		let fee = 100 as u64;
+		assert_ok!(QuorumModule::create(Origin::signed(alice), fee.into(), false));
+
+		// new request is made
+		let old_balance = PalletBalances::total_balance(&alice);
+		assert_ok!(
+			QuorumModule::request(
+				Origin::signed(alice),
+				quorum_id,
+				[0; 32],
+				fee.into(),
+				valid_period,
+			)
+		);
+		assert_ok!(QuorumModule::find_request(request_id));
+
+		// check that fee was paid
+		let new_balance = PalletBalances::total_balance(&alice);
+		assert_eq!(old_balance, new_balance + fee);
+	});
+}
+
 #[test]
 fn test_request_expires() {
 	ExtBuilder::default().build().execute_with(|| {
@@ -106,7 +164,7 @@ fn test_request_expires() {
 		let alice = 1 as u128;
 		let valid_period = 10 as u32;
 		let fee = 100 as u64;
-		assert_ok!(QuorumModule::create(Origin::signed(alice), fee.into(), false));
+		assert_ok!(QuorumModule::create(Origin::signed(alice), 0, false));
 
 		// new request is made
 		assert_ok!(
@@ -119,8 +177,6 @@ fn test_request_expires() {
 			)
 		);
 		assert_ok!(QuorumModule::find_request(request_id));
-
-		// TODO check that fee was paid
 
 		// TODO: advance x blocks, check that request was invalidated
 		// skip_blocks(valid_period + 1);
