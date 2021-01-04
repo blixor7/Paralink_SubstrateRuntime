@@ -3,13 +3,14 @@
 use super::*;
 use frame_support::{
 	weights::Weight,
-	impl_outer_event, impl_outer_origin, ord_parameter_types, parameter_types,
+	impl_outer_event, impl_outer_origin,
+	ord_parameter_types, parameter_types,
 };
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::IdentityLookup,
-	Perbill, FixedPointNumber,
+	Perbill,
 };
 use balances as pallet_balances;
 
@@ -96,6 +97,7 @@ impl pallet_balances::Trait for Runtime {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
+pub type PalletBalances = pallet_balances::Module<Runtime>;
 
 pub struct ExtBuilder;
 
@@ -113,10 +115,14 @@ impl ExtBuilder {
 
 		// inject test balances
 		pallet_balances::GenesisConfig::<Runtime>{
-			balances: vec![(0, 10_000), (1, 10_000), (2, 10_000)],
+			balances: vec![
+				(0, 10_000), // root
+				(1, 10_000), // alice
+				(2, 10_000), // bob
+				(3, 10_000), // charlie
+			],
 		}.assimilate_storage(&mut t).unwrap();
 
 		t.into()
 	}
 }
-

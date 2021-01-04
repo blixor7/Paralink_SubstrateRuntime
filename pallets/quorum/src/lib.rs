@@ -1,9 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
+use sp_core::H256;
 use frame_support::{
 	codec::{Decode, Encode},
-	traits::{Currency, ReservableCurrency},
+	traits::{Currency, ReservableCurrency, WithdrawReasons, ExistenceRequirement},
 	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::DispatchResult, ensure};
 use frame_system::{self as system, ensure_signed};
@@ -18,9 +19,14 @@ pub use serde::{Deserialize, Serialize};
 mod mock;
 mod tests;
 
-/// A maximum number of members.
-/// When membership reaches this number, no new members may join.
-pub const MAX_MEMBERS: usize = 32;
+/// When quorum reaches this many relayers, new ones can't join
+pub const MAX_RELAYERS: usize = 32;
+/// What is the minimum number of blocks quorums have to service a request
+pub const MIN_VALID_PERIOD: u32 = 10;
+/// For how many blocks is the longest pending request valid
+pub const MAX_VALID_PERIOD: u32 = 100;
+/// How much does it cost to create a new quorum
+pub const QUORUM_CREATION_FEE: u32 = 1;
 
 pub trait Trait: balances::Trait + system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -29,25 +35,132 @@ pub trait Trait: balances::Trait + system::Trait {
 
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug)]
+pub enum Membership {
+	/// Everyone Can make requests to the quorum
+	Everyone,
+	/// Only authorized users can make requests to the quorum
+	Whitelist,
+}
+
+/// By default the quorums are open to all users
+impl Default for Membership {
+	fn default() -> Self {
+		Membership::Everyone
+	}
+}
+
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug)]
 pub struct Quorum<AccountId, BalanceOf> {
-	pub members: Vec<AccountId>,
+	/// Relayers
+	pub relayers: Vec<AccountId>,
+	/// Balances of relayers
 	pub balances: Vec<BalanceOf>,
+	/// Quorum creator (admin)
 	pub creator: AccountId,
+	/// Total pending rewards in fees to be distributed between relayers
 	pub pending_rewards: BalanceOf,
+	/// Minimum fee that the quorum accepts for jobs
+	pub min_fee: BalanceOf,
+	/// Who can make oracle job requests
+	pub membership: Membership,
+}
+
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug)]
+pub enum AggregationRule {
+	// continuous values
+	Mean,
+	Median,
+	Min,
+	Max,
+	// discrete values
+	Mode,
+	// time based
+	First,
+	Last,
+}
+
+/// Take the last answer by default
+impl Default for AggregationRule {
+	fn default() -> Self {
+		Self::Last
+	}
+}
+
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug)]
+pub enum ValidationRule {
+	/// Do not perform validation
+	Pass,
+	/// Maximum allowed variability between answers
+	VarianceTreshold(u32),
+	/// Maximum allowed disagreement (discrete)
+	ConsensusTreshold(u8),
+}
+
+/// Do not apply validations by default
+impl Default for ValidationRule {
+	fn default() -> Self {
+		Self::Pass
+	}
+}
+
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug)]
+pub struct Request<AccountId, BalanceOf, BlockNumber> {
+	/// User who made the request
+	pub user: AccountId,
+	/// Relayer quorum
+	pub quorum_id: QuorumIndex,
+	/// Fee that has been paid
+	pub fee: BalanceOf,
+	/// Block number of request expiry
+	pub valid_till: BlockNumber,
+	/// IPFS pointer to the PQL query
+	pub pql_hash: H256,
+	/// Relayer answers
+	pub answers: Vec<[u8; 32]>,  // TODO: use SCALE instead?
+	/// Minimum relayer participation
+	pub min_participation: u8,
+	/// Answer validation function
+	pub validation_rule: ValidationRule,
+	/// Result aggreagation function
+	pub aggregation_rule: AggregationRule,
+	// TODO callback
+	// TODO callback status
 }
 
 
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 pub type QuorumOf<T> = Quorum<<T as system::Trait>::AccountId, BalanceOf<T>>;
+pub type RequestOf<T> = Request<
+	<T as system::Trait>::AccountId,
+	BalanceOf<T>,
+	<T as system::Trait>::BlockNumber,
+>;
 pub type QuorumIndex = u32;
+pub type RequestIndex = u32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as RelayerQuorums {
-		Quorums get(fn quorums): map hasher(blake2_128_concat) u32 => QuorumOf<T>;
-
 		/// Number of existing quorums. Also used as a hashmap index.
 		QuorumCount get(fn quorum_count): QuorumIndex;
+
+		/// Relayer quorums HashMap<quorum_id, quorum>
+		Quorums get(fn quorums): map hasher(blake2_128_concat) QuorumIndex => QuorumOf<T>;
+
+		/// Authorized users: DoubleHashMap<quorum_id, AccountId, ()>
+		QuorumUsers get(fn quorum_users):
+			double_map hasher(blake2_128_concat) QuorumIndex, hasher(blake2_128_concat) T::AccountId => ();
+
+		/// Oracle Requests HashMap<request_id, request>
+		Requests get(fn requests): map hasher(blake2_128_concat) RequestIndex => RequestOf<T>;
+
+		/// Current max(request_id). Wraps around u64::max_value().
+		MaxRequestId get(fn request_count): RequestIndex;
+
 	}
 }
 
@@ -55,20 +168,30 @@ decl_event!(
 	pub enum Event<T>
 	where
 		AccountId = <T as system::Trait>::AccountId,
+		Balance = BalanceOf<T>,
+		BlockNumber = <T as system::Trait>::BlockNumber,
 		{
 			QuorumCreated(QuorumIndex, AccountId),
-			MemberAdded(QuorumIndex, AccountId),
-			MemberRemoved(QuorumIndex, AccountId),
+			RelayerAdded(QuorumIndex, AccountId),
+			RelayerRemoved(QuorumIndex, AccountId),
+			UserAdded(QuorumIndex, AccountId),
+			UserRemoved(QuorumIndex, AccountId),
+			NewRequest(QuorumIndex, AccountId, Balance, BlockNumber),
+			ExpiredRequest(RequestIndex),
+			InvalidatedRequest(RequestIndex),
 		}
 );
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-		AlreadyMember,
-		NotMember,
-		MembershipLimitReached,
+		AlreadyRelayer,
+		NotRelayer,
+		RelayerLimitReached,
 		InvalidQuorum,
+		InvalidRequest,
 		Unauthorized,
+		ValueError,
+		NotUser,
 	}
 }
 
@@ -80,9 +203,17 @@ decl_module! {
 
 		/// Create a new quorum
 		#[weight = 10_000]
-		pub fn create(origin) -> DispatchResult {
+		pub fn create(origin, min_fee: BalanceOf<T>, members_only: bool) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			// TODO: add a minimum fee that is burned
+
+			// Burn a quorum creation fee
+			let fee = BalanceOf::<T>::from(QUORUM_CREATION_FEE);
+			if fee > BalanceOf::<T>::from(0) {
+				T::Currency::withdraw(
+					&who, fee,
+					WithdrawReasons::none(),
+					ExistenceRequirement::KeepAlive)?;
+			}
 
 			// Safely update the quorum index
 			let index = QuorumCount::get()
@@ -91,54 +222,62 @@ decl_module! {
 			QuorumCount::put(index);
 
 			// Create a new quorum
+			let membership = match members_only {
+				true => Membership::Whitelist,
+				false => Membership::Everyone,
+			};
 			<Quorums<T>>::insert(index, Quorum {
-				members: vec![],
+				relayers: vec![],
 				balances: vec![],
 				creator: who.clone(),
 				pending_rewards: 0.into(),
+				min_fee,
+				membership,
 			});
 
 			Self::deposit_event(RawEvent::QuorumCreated(index, who));
 			Ok(())
 		}
 
-		/// Creator adds a member to the membership set unless the max is reached
+
+		/// Creator adds a relayer to the relayers set unless the max is reached
 		#[weight = 10_000]
-		pub fn add_member(origin, quorum_id: QuorumIndex, new_member: T::AccountId) -> DispatchResult {
+		pub fn add_relayer(origin, quorum_id: QuorumIndex, relayer: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut quorum = Self::find_quorum(quorum_id)?;
 
-			// only quorum creator can add/remove new members (for now)
+			// only quorum creator can add/remove new relayers (for now)
 			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
 
-			ensure!(quorum.members.len() < MAX_MEMBERS, Error::<T>::MembershipLimitReached);
+			ensure!(quorum.relayers.len() < MAX_RELAYERS, Error::<T>::RelayerLimitReached);
 
 			// Avoid duplicates. Because the list is always ordered, we can
 			// leverage the binary search which makes this check O(log n).
-			match quorum.members.binary_search(&new_member) {
-				// If the search succeeds, the caller is already a member, so just return
-				Ok(_) => Err(Error::<T>::AlreadyMember.into()),
-				// If the search fails, the caller is not a member and we learned the index where
+			match quorum.relayers.binary_search(&relayer) {
+				// If the search succeeds, the caller is already a relayer, so just return
+				Ok(_) => Err(Error::<T>::AlreadyRelayer.into()),
+				// If the search fails, the caller is not a relayer and we learned the index where
 				// they should be inserted
 				Err(index) => {
 					// TODO: trigger pending rewards distribution
-					quorum.members.insert(index, new_member.clone());
+					quorum.relayers.insert(index, relayer.clone());
 					quorum.balances.insert(index, 0.into());
 					// Upsert the quorum
 					<Quorums<T>>::insert(&quorum_id, quorum);
-					Self::deposit_event(RawEvent::MemberAdded(quorum_id, new_member));
+					Self::deposit_event(RawEvent::RelayerAdded(quorum_id, relayer));
 					Ok(())
 				}
 			}
 		}
 
-		/// Creator removes a member.
-		#[weight = 10_000]
-		pub fn remove_member(origin, quorum_id: QuorumIndex, remove_member: T::AccountId) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let (mut quorum, index) = Self::find_quorum_member(quorum_id, remove_member.clone())?;
 
-			// only quorum creator can add/remove new members (for now)
+		/// Creator removes a relayer.
+		#[weight = 10_000]
+		pub fn remove_relayer(origin, quorum_id: QuorumIndex, relayer: T::AccountId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let (mut quorum, index) = Self::find_quorum_relayer(quorum_id, relayer.clone())?;
+
+			// only quorum creator can add/remove new relayers (for now)
 			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
 
 			// TODO: trigger pending rewards distribution
@@ -146,35 +285,153 @@ decl_module! {
 			if *balance > BalanceOf::<T>::from(0) {
 				T::Currency::deposit_into_existing(&who, *balance)?;
 			}
-			quorum.members.remove(index);
+			quorum.relayers.remove(index);
 			quorum.balances.remove(index);
 			<Quorums<T>>::insert(&quorum_id, quorum);
-			Self::deposit_event(RawEvent::MemberRemoved(quorum_id, remove_member));
+			Self::deposit_event(RawEvent::RelayerRemoved(quorum_id, relayer));
 			Ok(())
 		}
 
-		/// Member leaves
+
+		/// Relayer leaves
 		#[weight = 10_000]
 		pub fn leave(origin, quorum_id: QuorumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (mut quorum, index) = Self::find_quorum_member(quorum_id, who.clone())?;
+			let (mut quorum, index) = Self::find_quorum_relayer(quorum_id, who.clone())?;
 
 			// TODO: trigger pending rewards distribution
 			let balance = quorum.balances.get(index).unwrap();
 			if *balance > BalanceOf::<T>::from(0) {
 				T::Currency::deposit_into_existing(&who, *balance)?;
 			}
-			quorum.members.remove(index);
+			quorum.relayers.remove(index);
 			quorum.balances.remove(index);
 			<Quorums<T>>::insert(&quorum_id, quorum);
-			Self::deposit_event(RawEvent::MemberRemoved(quorum_id, who));
+			Self::deposit_event(RawEvent::RelayerRemoved(quorum_id, who));
 			Ok(())
+		}
+
+
+		/// Creator adds a new user to the quorum
+		#[weight = 10_000]
+		pub fn add_user(origin, quorum_id: QuorumIndex, user: T::AccountId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let quorum = Self::find_quorum(quorum_id)?;
+			ensure!(quorum.membership == Membership::Whitelist, Error::<T>::ValueError);
+
+			// only quorum creator can add/remove new users (for now)
+			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
+
+			<QuorumUsers<T>>::insert(&quorum_id, &user, ());
+			Self::deposit_event(RawEvent::UserAdded(quorum_id, user));
+			Ok(())
+		}
+
+
+		/// Creator removes a user from the quorum
+		#[weight = 10_000]
+		pub fn remove_user(origin, quorum_id: QuorumIndex, user: T::AccountId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let quorum = Self::find_quorum(quorum_id)?;
+			ensure!(quorum.membership == Membership::Whitelist, Error::<T>::ValueError);
+
+			// only quorum creator can add/remove new users (for now)
+			ensure!(who == quorum.creator, Error::<T>::Unauthorized);
+
+			<QuorumUsers<T>>::take(quorum_id, &user);
+			Self::deposit_event(RawEvent::UserRemoved(quorum_id, user));
+			Ok(())
+		}
+
+
+		/// Creator removes a user from the quorum
+		#[weight = 10_000]
+		pub fn request(
+			origin,
+			quorum_id: QuorumIndex,
+			ipfs_hash: [u8; 32], // TODO: should this be sp_core::H256?
+			fee: BalanceOf<T>,
+			valid_period: u32,
+			min_participation: u8,) -> DispatchResult
+		{
+			let user = ensure_signed(origin)?;
+			let quorum = Self::find_quorum(quorum_id)?;
+
+			// check if the user is allowed to submit a request to this quorum
+			if quorum.membership == Membership::Whitelist {
+				ensure!(<QuorumUsers<T>>::contains_key(quorum_id, &user), Error::<T>::NotUser);
+			}
+
+			// check if minimum participation is satisfiable
+			ensure!(
+				quorum.relayers.len() >= min_participation as usize,
+				Error::<T>::ValueError
+			);
+
+			// check valid period
+			ensure!(
+				valid_period >= MIN_VALID_PERIOD && valid_period <= MAX_VALID_PERIOD,
+				Error::<T>::ValueError
+			);
+			let current_block: T::BlockNumber = frame_system::Module::<T>::block_number();
+			let valid_period: T::BlockNumber = valid_period.into();
+			let valid_till = current_block + valid_period;
+
+			// pay the fee
+			ensure!(fee >= quorum.min_fee, Error::<T>::ValueError);
+			if fee > BalanceOf::<T>::from(0) {
+				T::Currency::withdraw(
+					&user, fee,
+					WithdrawReasons::none(),
+					ExistenceRequirement::KeepAlive)?;
+			}
+
+			// store the request
+			let request_id = MaxRequestId::get().wrapping_add(1);
+			MaxRequestId::put(&request_id);
+			<Requests<T>>::insert(&request_id, Request {
+				user: user.clone(),
+				pql_hash: H256::from_slice(&ipfs_hash),
+				quorum_id,
+				fee,
+				valid_till,
+				min_participation,
+				aggregation_rule: AggregationRule::Last, // TODO
+				validation_rule: ValidationRule::Pass,   // TODO
+				answers: vec![],
+			});
+
+			// emit the event
+			Self::deposit_event(RawEvent::NewRequest(quorum_id, user, fee, valid_till));
+			Ok(())
+		}
+
+		/// Block post-processing hook
+		fn on_finalize(n: T::BlockNumber) {
+			for (request_id, request) in Requests::<T>::iter() {
+				// cleanup expired requests
+				if n > request.valid_till {
+					// TODO: consider partial refund
+					Requests::<T>::remove(request_id);
+					Self::deposit_event(RawEvent::ExpiredRequest(request_id));
+				}
+				// TODO: finalize requests with n/m answers
+			}
 		}
 
 	}
 }
 
 impl<T: Trait> Module<T> {
+
+	/// Find a request
+	pub fn find_request(request_id: RequestIndex) ->
+		Result<Request<T::AccountId, BalanceOf<T>, T::BlockNumber>, Error<T>>
+	{
+		ensure!(<Requests<T>>::contains_key(&request_id), Error::<T>::InvalidRequest);
+		let request = <Requests<T>>::get(&request_id);
+		Ok(request)
+	}
 
 	/// Find a quorum
 	pub fn find_quorum(quorum_id: QuorumIndex) ->
@@ -185,22 +442,33 @@ impl<T: Trait> Module<T> {
 		Ok(quorum)
 	}
 
-	/// Find and return a quorum and the location of its member
-	pub fn find_quorum_member(quorum_id: QuorumIndex, who: T::AccountId) ->
+	/// Find and return a quorum and the location of its relayer
+	pub fn find_quorum_relayer(quorum_id: QuorumIndex, relayer: T::AccountId) ->
 		Result<(Quorum<T::AccountId, BalanceOf<T>>, usize), Error<T>>
 	{
 		let quorum = Self::find_quorum(quorum_id)?;
 
-		match quorum.members.binary_search(&who) {
+		match quorum.relayers.binary_search(&relayer) {
 			Ok(index) => {
 				Ok((quorum, index))
 			},
-			Err(_) => Err(Error::<T>::NotMember.into()),
+			Err(_) => Err(Error::<T>::NotRelayer.into()),
 		}
 	}
 
-	/// Distribute pending_rewards between quorum members
+	/// Check if the user is a quorum user
+	pub fn is_quorum_user(quorum_id: QuorumIndex, user: T::AccountId) -> bool {
+		<QuorumUsers<T>>::contains_key(quorum_id, &user)
+	}
+
+	/// Distribute pending_rewards between quorum relayers
 	fn _distribute_pending_rewards() {
 		todo!();
 	}
+
+	// just for testing
+	pub fn balance_of(user: &T::AccountId) -> BalanceOf<T> {
+		T::Currency::total_balance(&user)
+	}
+
 }
