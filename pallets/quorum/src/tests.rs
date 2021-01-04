@@ -136,6 +136,7 @@ fn test_request() {
 		let valid_period = 10 as u32;
 		let fee = 100 as u64;
 		assert_ok!(QuorumModule::create(Origin::signed(alice), fee.into(), false));
+		assert_ok!(QuorumModule::add_relayer(Origin::signed(alice), quorum_id, alice));
 
 		// new request is made
 		let old_balance = PalletBalances::total_balance(&alice);
@@ -146,6 +147,7 @@ fn test_request() {
 				[0; 32],
 				fee.into(),
 				valid_period,
+				1,
 			)
 		);
 		assert_ok!(QuorumModule::find_request(request_id));
@@ -165,6 +167,7 @@ fn test_request_expires() {
 		let valid_period = 10 as u32;
 		let fee = 100 as u64;
 		assert_ok!(QuorumModule::create(Origin::signed(alice), 0, false));
+		assert_ok!(QuorumModule::add_relayer(Origin::signed(alice), quorum_id, alice));
 
 		// new request is made
 		assert_ok!(
@@ -174,6 +177,7 @@ fn test_request_expires() {
 				[0; 32],
 				fee.into(),
 				valid_period,
+				1,
 			)
 		);
 		assert_ok!(QuorumModule::find_request(request_id));

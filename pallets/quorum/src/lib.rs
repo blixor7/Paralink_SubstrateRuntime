@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
+use sp_core::H256;
 use frame_support::{
 	codec::{Decode, Encode},
 	traits::{Currency, ReservableCurrency, WithdrawReasons, ExistenceRequirement},
@@ -67,6 +68,46 @@ pub struct Quorum<AccountId, BalanceOf> {
 }
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug)]
+pub enum AggregationRule {
+	// continuous values
+	Mean,
+	Median,
+	Min,
+	Max,
+	// discrete values
+	Mode,
+	// time based
+	First,
+	Last,
+}
+
+/// Take the last answer by default
+impl Default for AggregationRule {
+	fn default() -> Self {
+		Self::Last
+	}
+}
+
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug)]
+pub enum ValidationRule {
+	/// Do not perform validation
+	Pass,
+	/// Maximum allowed variability between answers
+	VarianceTreshold(u32),
+	/// Maximum allowed disagreement (discrete)
+	ConsensusTreshold(u8),
+}
+
+/// Do not apply validations by default
+impl Default for ValidationRule {
+	fn default() -> Self {
+		Self::Pass
+	}
+}
+
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug)]
 pub struct Request<AccountId, BalanceOf, BlockNumber> {
 	/// User who made the request
@@ -77,13 +118,18 @@ pub struct Request<AccountId, BalanceOf, BlockNumber> {
 	pub fee: BalanceOf,
 	/// Block number of request expiry
 	pub valid_till: BlockNumber,
-	// PQL address
-	// relayer answers
-	// min participation
-	// validation rule
-	// aggregation rule
-	// callback
-	// callback status
+	/// IPFS pointer to the PQL query
+	pub pql_hash: H256,
+	/// Relayer answers
+	pub answers: Vec<[u8; 32]>,  // TODO: use SCALE instead?
+	/// Minimum relayer participation
+	pub min_participation: u8,
+	/// Answer validation function
+	pub validation_rule: ValidationRule,
+	/// Result aggreagation function
+	pub aggregation_rule: AggregationRule,
+	// TODO callback
+	// TODO callback status
 }
 
 
@@ -132,6 +178,7 @@ decl_event!(
 			UserRemoved(QuorumIndex, AccountId),
 			NewRequest(QuorumIndex, AccountId, Balance, BlockNumber),
 			ExpiredRequest(RequestIndex),
+			InvalidatedRequest(RequestIndex),
 		}
 );
 
@@ -304,7 +351,8 @@ decl_module! {
 			quorum_id: QuorumIndex,
 			ipfs_hash: [u8; 32], // TODO: should this be sp_core::H256?
 			fee: BalanceOf<T>,
-			valid_period: u32,) -> DispatchResult
+			valid_period: u32,
+			min_participation: u8,) -> DispatchResult
 		{
 			let user = ensure_signed(origin)?;
 			let quorum = Self::find_quorum(quorum_id)?;
@@ -314,7 +362,11 @@ decl_module! {
 				ensure!(<QuorumUsers<T>>::contains_key(quorum_id, &user), Error::<T>::NotUser);
 			}
 
-			// TODO: check validation rules (ie. min_relayers)
+			// check if minimum participation is satisfiable
+			ensure!(
+				quorum.relayers.len() >= min_participation as usize,
+				Error::<T>::ValueError
+			);
 
 			// check valid period
 			ensure!(
@@ -339,9 +391,14 @@ decl_module! {
 			MaxRequestId::put(&request_id);
 			<Requests<T>>::insert(&request_id, Request {
 				user: user.clone(),
+				pql_hash: H256::from_slice(&ipfs_hash),
 				quorum_id,
 				fee,
 				valid_till,
+				min_participation,
+				aggregation_rule: AggregationRule::Last, // TODO
+				validation_rule: ValidationRule::Pass,   // TODO
+				answers: vec![],
 			});
 
 			// emit the event
@@ -354,6 +411,7 @@ decl_module! {
 			for (request_id, request) in Requests::<T>::iter() {
 				// cleanup expired requests
 				if n > request.valid_till {
+					// TODO: consider partial refund
 					Requests::<T>::remove(request_id);
 					Self::deposit_event(RawEvent::ExpiredRequest(request_id));
 				}
