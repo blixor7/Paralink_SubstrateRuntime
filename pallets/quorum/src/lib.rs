@@ -549,8 +549,8 @@ impl<T: Trait> Module<T> {
 			AggregationRule::Min => *request.answers.iter().min().unwrap(),
 			AggregationRule::Max => *request.answers.iter().max().unwrap(),
 			AggregationRule::Mean => math::mean(&request.answers),
-			AggregationRule::Median => 0.into(), // TODO
-			AggregationRule::Mode => 0.into(), // TODO
+			AggregationRule::Median => math::median(&request.answers),
+			AggregationRule::Mode => math::mode(&request.answers),
 			AggregationRule::First => request.answers[0],
 			AggregationRule::Last => request.answers[request.answers.len()],
 		}
@@ -573,4 +573,17 @@ mod math {
 		let len = xs.len();
 		xs.iter().sum::<Answer>() / len as Answer
 	}
+
+	pub fn median(xs: &Vec<Answer>) -> Answer {
+		// TODO
+		// https://doc.rust-lang.org/std/primitive.slice.html#method.select_nth_unstable
+		0.into()
+	}
+
+	pub fn mode(xs: &Vec<Answer>) -> Answer {
+		// TODO
+		// BTreeMap
+		0.into()
+	}
+
 }
