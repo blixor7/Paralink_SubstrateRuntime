@@ -5,8 +5,9 @@ use sp_core::H256;
 use frame_support::{
 	codec::{Decode, Encode},
 	traits::{Currency, ReservableCurrency, WithdrawReasons, ExistenceRequirement},
+	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	decl_error, decl_event, decl_module, decl_storage,
-	dispatch::DispatchResult, ensure};
+	ensure};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
 	RuntimeDebug,
@@ -28,11 +29,24 @@ pub const MAX_VALID_PERIOD: u32 = 100;
 /// How much does it cost to create a new quorum
 pub const QUORUM_CREATION_FEE: u32 = 1;
 
+
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+pub type QuorumOf<T> = Quorum<<T as system::Trait>::AccountId, BalanceOf<T>>;
+pub type RequestOf<T> = Request<
+	<T as system::Trait>::AccountId,
+	BalanceOf<T>,
+	<T as system::Trait>::BlockNumber,
+>;
+/// Currently supported answer type
+pub type Answer = i64;
+pub type QuorumIndex = u32;
+pub type RequestIndex = u32;
+
 pub trait Trait: balances::Trait + system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	/// Native currency used for fees and rewards
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 }
-
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug)]
@@ -80,6 +94,8 @@ pub enum AggregationRule {
 	// time based
 	First,
 	Last,
+	// experimental
+	// Random,
 }
 
 /// Take the last answer by default
@@ -120,8 +136,12 @@ pub struct Request<AccountId, BalanceOf, BlockNumber> {
 	pub valid_till: BlockNumber,
 	/// IPFS pointer to the PQL query
 	pub pql_hash: H256,
-	/// Relayer answers
-	pub answers: Vec<[u8; 32]>,  // TODO: use SCALE instead?
+	/// Oracles that have already answered
+	pub relayers: Vec<AccountId>,
+	/// Relayer answers (only integers supported at the moment)
+	pub answers: Vec<Answer>,
+	// TODO: use some kind of encoding instead
+	// pub answers: Vec<[u8; 32]>,
 	/// Minimum relayer participation
 	pub min_participation: u8,
 	/// Answer validation function
@@ -132,16 +152,6 @@ pub struct Request<AccountId, BalanceOf, BlockNumber> {
 	// TODO callback status
 }
 
-
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-pub type QuorumOf<T> = Quorum<<T as system::Trait>::AccountId, BalanceOf<T>>;
-pub type RequestOf<T> = Request<
-	<T as system::Trait>::AccountId,
-	BalanceOf<T>,
-	<T as system::Trait>::BlockNumber,
->;
-pub type QuorumIndex = u32;
-pub type RequestIndex = u32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as RelayerQuorums {
@@ -158,7 +168,7 @@ decl_storage! {
 		/// Oracle Requests HashMap<request_id, request>
 		Requests get(fn requests): map hasher(blake2_128_concat) RequestIndex => RequestOf<T>;
 
-		/// Current max(request_id). Wraps around u64::max_value().
+		/// Current max(request_id). Wraps around u64::max_value()
 		MaxRequestId get(fn request_count): RequestIndex;
 
 	}
@@ -177,21 +187,24 @@ decl_event!(
 			UserAdded(QuorumIndex, AccountId),
 			UserRemoved(QuorumIndex, AccountId),
 			NewRequest(QuorumIndex, AccountId, Balance, BlockNumber),
-			ExpiredRequest(RequestIndex),
-			InvalidatedRequest(RequestIndex),
+			RequestExpired(RequestIndex),
+			RequestInvalidated(RequestIndex),
+			NewAnswer(RequestIndex, AccountId, Answer),
 		}
 );
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-		AlreadyRelayer,
 		NotRelayer,
+		NotUser,
+		AlreadyRelayer,
 		RelayerLimitReached,
 		InvalidQuorum,
 		InvalidRequest,
 		Unauthorized,
+		/// Invalid fn parameters
 		ValueError,
-		NotUser,
+		DuplicateAnswer,
 	}
 }
 
@@ -203,7 +216,9 @@ decl_module! {
 
 		/// Create a new quorum
 		#[weight = 10_000]
-		pub fn create(origin, min_fee: BalanceOf<T>, members_only: bool) -> DispatchResult {
+		pub fn create(origin, min_fee: BalanceOf<T>, members_only: bool)
+			-> DispatchResultWithPostInfo
+		{
 			let who = ensure_signed(origin)?;
 
 			// Burn a quorum creation fee
@@ -236,7 +251,8 @@ decl_module! {
 			});
 
 			Self::deposit_event(RawEvent::QuorumCreated(index, who));
-			Ok(())
+			// return quorum id
+			Ok(Some(index as u64).into())
 		}
 
 
@@ -352,7 +368,7 @@ decl_module! {
 			ipfs_hash: [u8; 32], // TODO: should this be sp_core::H256?
 			fee: BalanceOf<T>,
 			valid_period: u32,
-			min_participation: u8,) -> DispatchResult
+			min_participation: u8,) -> DispatchResultWithPostInfo
 		{
 			let user = ensure_signed(origin)?;
 			let quorum = Self::find_quorum(quorum_id)?;
@@ -399,23 +415,58 @@ decl_module! {
 				aggregation_rule: AggregationRule::Last, // TODO
 				validation_rule: ValidationRule::Pass,   // TODO
 				answers: vec![],
+				relayers: vec![],
 			});
 
 			// emit the event
 			Self::deposit_event(RawEvent::NewRequest(quorum_id, user, fee, valid_till));
+			Ok(Some(request_id as u64).into())
+		}
+
+		/// Oracle submits an answer for a given Request
+		#[weight = 10_000]
+		pub fn answer(origin, request_id: RequestIndex, result: Answer) -> DispatchResult {
+			let oracle = ensure_signed(origin)?;
+			// check if request exists
+			let mut request = Self::find_request(request_id)?;
+			// check if oracle is part of relayer quorum
+			let _ = Self::find_quorum_relayer(request.quorum_id, oracle.clone())?;
+			// check that oracle has not answered already
+			request.relayers.binary_search(&oracle).err().ok_or(Error::<T>::DuplicateAnswer)?;
+			// record the answer
+			request.relayers.push(oracle.clone());
+			request.answers.push(result);
+			<Requests<T>>::insert(&request_id, request);
+			// emit the event
+			Self::deposit_event(RawEvent::NewAnswer(request_id, oracle, result));
 			Ok(())
 		}
+
 
 		/// Block post-processing hook
 		fn on_finalize(n: T::BlockNumber) {
 			for (request_id, request) in Requests::<T>::iter() {
-				// cleanup expired requests
+				// remove expired requests
 				if n > request.valid_till {
 					// TODO: consider partial refund
 					Requests::<T>::remove(request_id);
-					Self::deposit_event(RawEvent::ExpiredRequest(request_id));
+					Self::deposit_event(RawEvent::RequestExpired(request_id));
+					continue;
 				}
-				// TODO: finalize requests with n/m answers
+				// run the validation and aggregation rules
+				if request.answers.len() >= request.min_participation as usize {
+					// remove invalidated requests
+					if !Self::_validate(&request) {
+						Requests::<T>::remove(request_id);
+						Self::deposit_event(RawEvent::RequestInvalidated(request_id));
+						continue;
+					}
+					// call _aggregate()
+					// call _callback()
+					// credit the request fee to the quorum
+					// delete the request from storage
+					// TODO: should we reward only the oracles that submitted the answer?
+				}
 			}
 		}
 
@@ -461,14 +512,78 @@ impl<T: Trait> Module<T> {
 		<QuorumUsers<T>>::contains_key(quorum_id, &user)
 	}
 
+	// just for testing
+	pub fn balance_of(user: &T::AccountId) -> BalanceOf<T> {
+		T::Currency::total_balance(&user)
+	}
+
+
+	//
+	// Internal methods
+	//
+
+
 	/// Distribute pending_rewards between quorum relayers
 	fn _distribute_pending_rewards() {
 		todo!();
 	}
 
-	// just for testing
-	pub fn balance_of(user: &T::AccountId) -> BalanceOf<T> {
-		T::Currency::total_balance(&user)
+	/// Check if the validation rule applies to submitted answers
+	fn _validate(request: &Request<T::AccountId, BalanceOf<T>, T::BlockNumber>) -> bool {
+		// do not use this function before validating sufficient n of responses
+		if request.answers.len() < request.min_participation as usize { panic!(); }
+
+		match request.validation_rule {
+			ValidationRule::Pass=> true,
+			ValidationRule::VarianceTreshold(var) => false, // TODO
+			ValidationRule::ConsensusTreshold(n) => false, // TODO
+		}
+	}
+
+	/// Apply the validation rule to submitted answers
+	fn _aggregate(request: &Request<T::AccountId, BalanceOf<T>, T::BlockNumber>) -> Answer {
+		// do not use this function before validating sufficient n of responses
+		if request.answers.len() < request.min_participation as usize { panic!(); }
+
+		match request.aggregation_rule {
+			AggregationRule::Min => *request.answers.iter().min().unwrap(),
+			AggregationRule::Max => *request.answers.iter().max().unwrap(),
+			AggregationRule::Mean => math::mean(&request.answers),
+			AggregationRule::Median => math::median(&request.answers),
+			AggregationRule::Mode => math::mode(&request.answers),
+			AggregationRule::First => request.answers[0],
+			AggregationRule::Last => request.answers[request.answers.len()],
+		}
+	}
+
+	/// Deliver the answer from a finalized Request
+	pub fn _callback() {
+		// send the result via XCMP?
+		// emit the event
+	}
+
+}
+
+mod math {
+	use sp_std::prelude::*; // Vec
+	use super::Answer;
+
+	// TODO: make this generic
+	pub fn mean(xs: &Vec<Answer>) -> Answer {
+		let len = xs.len();
+		xs.iter().sum::<Answer>() / len as Answer
+	}
+
+	pub fn median(xs: &Vec<Answer>) -> Answer {
+		// TODO
+		// https://doc.rust-lang.org/std/primitive.slice.html#method.select_nth_unstable
+		0.into()
+	}
+
+	pub fn mode(xs: &Vec<Answer>) -> Answer {
+		// TODO
+		// BTreeMap
+		0.into()
 	}
 
 }
