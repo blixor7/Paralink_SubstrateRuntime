@@ -271,75 +271,75 @@ impl pallet_template::Trait for Runtime {
 	type Event = Event;
 }
 
-// ---------------------- OCW Configurations ----------------------
-
-/// Payload data to be signed when making signed transaction from off-chain workers,
-///   inside `create_transaction` function.
-pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
-
-impl pallet_ocw::Trait for Runtime {
-	type AuthorityId = pallet_ocw::crypto::TestAuthId;
-	type Call = Call;
-	type Event = Event;
-}
-
-impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
-where
-	Call: From<LocalCall>,
-{
-	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
-		call: Call,
-		public: <Signature as sp_runtime::traits::Verify>::Signer,
-		account: AccountId,
-		index: Index,
-	) -> Option<(
-		Call,
-		<UncheckedExtrinsic as sp_runtime::traits::Extrinsic>::SignaturePayload,
-	)> {
-		let period = BlockHashCount::get() as u64;
-		let current_block = System::block_number()
-			.saturated_into::<u64>()
-			.saturating_sub(1);
-		let tip = 0;
-		let extra: SignedExtra = (
-			frame_system::CheckSpecVersion::<Runtime>::new(),
-			frame_system::CheckTxVersion::<Runtime>::new(),
-			frame_system::CheckGenesis::<Runtime>::new(),
-			frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
-			frame_system::CheckNonce::<Runtime>::from(index),
-			frame_system::CheckWeight::<Runtime>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
-		);
-
-		#[cfg_attr(not(feature = "std"), allow(unused_variables))]
-		let raw_payload = SignedPayload::new(call, extra)
-			.map_err(|e| {
-				debug::native::warn!("SignedPayload error: {:?}", e);
-			})
-			.ok()?;
-
-		let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
-
-		let address = account;
-		let (call, extra, _) = raw_payload.deconstruct();
-		Some((call, (address, signature, extra)))
-	}
-}
-
-impl frame_system::offchain::SigningTypes for Runtime {
-	type Public = <Signature as sp_runtime::traits::Verify>::Signer;
-	type Signature = Signature;
-}
-
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
-where
-	Call: From<C>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = UncheckedExtrinsic;
-}
-
-// ---------------------- End of OCW config ----------------------
+// // ---------------------- OCW Configurations ----------------------
+//
+// /// Payload data to be signed when making signed transaction from off-chain workers,
+// ///   inside `create_transaction` function.
+// pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
+//
+// impl pallet_ocw::Trait for Runtime {
+// 	type AuthorityId = pallet_ocw::crypto::TestAuthId;
+// 	type Call = Call;
+// 	type Event = Event;
+// }
+//
+// impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
+// where
+// 	Call: From<LocalCall>,
+// {
+// 	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+// 		call: Call,
+// 		public: <Signature as sp_runtime::traits::Verify>::Signer,
+// 		account: AccountId,
+// 		index: Index,
+// 	) -> Option<(
+// 		Call,
+// 		<UncheckedExtrinsic as sp_runtime::traits::Extrinsic>::SignaturePayload,
+// 	)> {
+// 		let period = BlockHashCount::get() as u64;
+// 		let current_block = System::block_number()
+// 			.saturated_into::<u64>()
+// 			.saturating_sub(1);
+// 		let tip = 0;
+// 		let extra: SignedExtra = (
+// 			frame_system::CheckSpecVersion::<Runtime>::new(),
+// 			frame_system::CheckTxVersion::<Runtime>::new(),
+// 			frame_system::CheckGenesis::<Runtime>::new(),
+// 			frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
+// 			frame_system::CheckNonce::<Runtime>::from(index),
+// 			frame_system::CheckWeight::<Runtime>::new(),
+// 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+// 		);
+//
+// 		#[cfg_attr(not(feature = "std"), allow(unused_variables))]
+// 		let raw_payload = SignedPayload::new(call, extra)
+// 			.map_err(|e| {
+// 				debug::native::warn!("SignedPayload error: {:?}", e);
+// 			})
+// 			.ok()?;
+//
+// 		let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
+//
+// 		let address = account;
+// 		let (call, extra, _) = raw_payload.deconstruct();
+// 		Some((call, (address, signature, extra)))
+// 	}
+// }
+//
+// impl frame_system::offchain::SigningTypes for Runtime {
+// 	type Public = <Signature as sp_runtime::traits::Verify>::Signer;
+// 	type Signature = Signature;
+// }
+//
+// impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
+// where
+// 	Call: From<C>,
+// {
+// 	type OverarchingCall = Call;
+// 	type Extrinsic = UncheckedExtrinsic;
+// }
+//
+// // ---------------------- End of OCW config ----------------------
 
 
 // ---------------------- Quorum Configurations ----------------------
@@ -367,7 +367,7 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		// Include the custom logic from the template pallet in the runtime.
 		TemplateModule: pallet_template::{Module, Call, Storage, Event<T>},
-		OcwRuntime: pallet_ocw::{Module, Call, Storage, Event<T>},
+		// OcwRuntime: pallet_ocw::{Module, Call, Storage, Event<T>},
 		RelayerQuorums: pallet_quorum::{Module, Call, Storage, Event<T>},
 	}
 );
