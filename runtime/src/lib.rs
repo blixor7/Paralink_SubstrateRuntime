@@ -105,7 +105,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	transaction_version: 1,
 };
 
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
+// 10 second block time
+pub const MILLISECS_PER_BLOCK: u64 = 10_000;
 
 pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
 

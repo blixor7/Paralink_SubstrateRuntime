@@ -564,6 +564,7 @@ impl<T: Trait> Module<T> {
 
 }
 
+#[allow(dead_code)]
 mod math {
 	use sp_std::prelude::*; // Vec
 	use super::Answer;
