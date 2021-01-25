@@ -6,7 +6,7 @@ use paralink_runtime::{
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{Verify, IdentifyAccount};
-use sc_service::ChainType;
+use sc_service::{ChainType, Properties};
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -71,7 +71,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		// Protocol ID
 		None,
 		// Properties
-		None,
+		Some(para_properties()),
 		// Extensions
 		None,
 	))
@@ -119,10 +119,18 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		// Protocol ID
 		None,
 		// Properties
-		None,
+		Some(para_properties()),
 		// Extensions
 		None,
 	))
+}
+
+pub fn para_properties() -> Properties {
+	let mut p = Properties::new();
+	p.insert("ss58format".into(), 42.into());
+	p.insert("tokenDecimals".into(), 10.into());
+	p.insert("tokenSymbol".into(), "PARA".into());
+	p
 }
 
 /// Configure initial storage state for FRAME modules.
