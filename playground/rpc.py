@@ -1,6 +1,7 @@
 from substrateinterface import SubstrateInterface
 
-ip = "127.0.0.1"
+# ip = "127.0.0.1"
+ip = "rpc-testnet.paralink.network"
 port = 9933
 
 s = SubstrateInterface(
