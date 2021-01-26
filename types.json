@@ -1,0 +1,52 @@
+{
+    "BalanceOf": "Balance",
+    "QuorumOf": "Quorum",
+    "RequestOf": "Request",
+    "Answer": "i64",
+    "QuorumIndex": "u32",
+    "RequestIndex": "u32",
+    "Membership": {
+        "_enum": [
+            "Everyone",
+            "Whitelist"
+        ]
+    },
+    "Quorum": {
+        "relayers": "Vec<AccountId>",
+        "balances": "Vec<Balance>",
+        "creator": "AccountId",
+        "pending_rewards": "Balance",
+        "min_fee": "Balance",
+        "membership": "Membership"
+    },
+    "AggregationRule": {
+        "_enum": [
+            "Mean",
+            "Median",
+            "Min",
+            "Max",
+            "Mode",
+            "First",
+            "Last"
+        ]
+    },
+    "ValidationRule": {
+        "_enum": {
+            "Pass": "None",
+            "VarianceThreshold": "u32",
+            "ConsesusThreshold": "u8"
+        }
+    },
+    "Request": {
+        "user": "AccountId",
+        "quorum_id": "u32",
+        "fee": "Balance",
+        "valid_till": "BlockNumber",
+        "pql_hash": "H256",
+        "relayers": "Vec<AccountId>",
+        "answers": "Vec<i64>",
+        "min_participation": "u8",
+        "validation_rule": "ValidationRule",
+        "aggregation_rule": "AggregationRule"
+    }
+}

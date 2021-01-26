@@ -111,9 +111,9 @@ pub enum ValidationRule {
 	/// Do not perform validation
 	Pass,
 	/// Maximum allowed variability between answers
-	VarianceTreshold(u32),
+	VarianceThreshold(u32),
 	/// Maximum allowed disagreement (discrete)
-	ConsensusTreshold(u8),
+	ConsensusThreshold(u8),
 }
 
 /// Do not apply validations by default
@@ -535,8 +535,8 @@ impl<T: Trait> Module<T> {
 
 		match request.validation_rule {
 			ValidationRule::Pass=> true,
-			ValidationRule::VarianceTreshold(var) => false, // TODO
-			ValidationRule::ConsensusTreshold(n) => false, // TODO
+			ValidationRule::VarianceThreshold(var) => false, // TODO
+			ValidationRule::ConsensusThreshold(n) => false, // TODO
 		}
 	}
 
