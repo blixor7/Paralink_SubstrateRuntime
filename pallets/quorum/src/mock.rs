@@ -97,7 +97,7 @@ impl pallet_balances::Trait for Runtime {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-pub type PalletBalances = pallet_balances::Module<Runtime>;
+pub type Balances = pallet_balances::Module<Runtime>;
 
 pub struct ExtBuilder;
 

@@ -514,7 +514,7 @@ impl<T: Trait> Module<T> {
 
 	// just for testing
 	pub fn balance_of(user: &T::AccountId) -> BalanceOf<T> {
-		T::Currency::total_balance(&user)
+		T::Currency::free_balance(&user)
 	}
 
 

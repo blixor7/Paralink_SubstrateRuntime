@@ -6,7 +6,7 @@ use sp_runtime::{traits::BadOrigin};
 
 use mock::{
 	System, Runtime, ExtBuilder, Origin,
-	QuorumModule, PalletBalances,
+	QuorumModule, Balances,
 	TestEvent,
 };
 
@@ -15,15 +15,15 @@ fn test_ext_builder() {
 	ExtBuilder::default().build().execute_with(|| {
 		// check that alice has injected funds
 		let alice = 1 as u128;
-		let balance = PalletBalances::total_balance(&alice);
+		let balance = Balances::total_balance(&alice);
 		assert_eq!(balance, 10_000 as u64);
 
 		// check alice balance from QuorumModule::Currency
-		let balance = QuorumModule::balance_of(&alice);
+		let balance = Balances::free_balance(&alice);
 		assert_eq!(balance, 10_000 as u64);
 
 		// check total issuance
-		assert_eq!(PalletBalances::total_issuance(), 40_000 as u64);
+		assert_eq!(Balances::total_issuance(), 40_000 as u64);
 	});
 }
 
@@ -139,7 +139,7 @@ fn test_request() {
 		assert_ok!(QuorumModule::add_relayer(Origin::signed(alice), quorum_id, alice));
 
 		// new request is made
-		let old_balance = PalletBalances::total_balance(&alice);
+		let old_balance = Balances::total_balance(&alice);
 		assert_ok!(
 			QuorumModule::request(
 				Origin::signed(alice),
@@ -153,7 +153,7 @@ fn test_request() {
 		assert_ok!(QuorumModule::find_request(request_id));
 
 		// check that fee was paid
-		let new_balance = PalletBalances::total_balance(&alice);
+		let new_balance = Balances::total_balance(&alice);
 		assert_eq!(old_balance, new_balance + fee);
 	});
 }
