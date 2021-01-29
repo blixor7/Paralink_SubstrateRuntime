@@ -1,10 +1,7 @@
 from substrateinterface import SubstrateInterface
 
-ip = "127.0.0.1"
-port = 9933
-
 s = SubstrateInterface(
-    url=f"http://{ip}:{port}",
+    url=f"https://rpc-testnet.paralink.network",
     ss58_format=42,
     type_registry_preset='substrate-node-template'
 )
