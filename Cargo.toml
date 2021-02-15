@@ -4,7 +4,8 @@ panic = 'unwind'
 [workspace]
 members = [
     'node',
-    'pallets/*',
+    'pallets/quorum',
+    'pallets/template',
     'runtime',
 ]
-exclude = ['playground']
+exclude = ['playground', 'pallets/ocw']

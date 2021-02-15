@@ -5,9 +5,9 @@ use frame_support::{assert_noop, assert_ok, assert_err};
 use sp_runtime::{traits::BadOrigin};
 
 use mock::{
-	System, Runtime, ExtBuilder, Origin,
+	System, TestRuntime, ExtBuilder, Origin,
 	QuorumModule, Balances,
-	TestEvent,
+	Event,
 };
 
 #[test]
@@ -61,7 +61,7 @@ fn test_add_remove_relayer() {
 		// cannot add alice twice
 		assert_err!(
 			QuorumModule::add_relayer(Origin::signed(alice), quorum_id, alice),
-			Error::<Runtime>::AlreadyRelayer
+			Error::<TestRuntime>::AlreadyRelayer
 		);
 
 		// add bob
@@ -199,7 +199,7 @@ fn test_unauthorized() {
 		// so bob can't add relayers
 		assert_err!(
 			QuorumModule::add_relayer(Origin::signed(bob), quorum_id, bob),
-			Error::<Runtime>::Unauthorized
+			Error::<TestRuntime>::Unauthorized
 		);
 		// only alice can add relayers
 		assert_ok!(QuorumModule::add_relayer(Origin::signed(alice), quorum_id, bob));
@@ -212,11 +212,11 @@ fn test_unauthorized() {
 		assert_ok!(QuorumModule::remove_user(Origin::signed(alice), quorum_id, bob));
 		assert_err!(
 			QuorumModule::add_user(Origin::signed(bob), quorum_id, bob),
-			Error::<Runtime>::Unauthorized
+			Error::<TestRuntime>::Unauthorized
 		);
 		assert_err!(
 			QuorumModule::remove_user(Origin::signed(bob), quorum_id, bob),
-			Error::<Runtime>::Unauthorized
+			Error::<TestRuntime>::Unauthorized
 		);
 	});
 }

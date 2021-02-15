@@ -12,15 +12,15 @@ test:
 
 .PHONY: run
 run:
-	WASM_BUILD_TOOLCHAIN=nightly-2020-10-05 cargo run -- --dev --tmp
+	cargo run -- --dev --tmp
 
 .PHONY: build
 build:
-	WASM_BUILD_TOOLCHAIN=nightly-2020-10-05 cargo build --release
+	cargo build --release
 
 .PHONY: watch
 watch:
-	WASM_BUILD_TOOLCHAIN=nightly-2020-10-05 cargo watch -c -x build
+	cargo watch -c -x build
 
 .PHONY: doc
 doc:

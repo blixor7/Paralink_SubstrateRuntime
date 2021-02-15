@@ -1,12 +1,6 @@
 {
-    "Address": "AccountId",
-    "LookupSource": "AccountId",
-
-    "_2.0.1": {
-        "Address": "MultiAddress",
-        "LookupSource": "MultiAddress"
-    },
-
+    "Address": "MultiAddress",
+    "LookupSource": "MultiAddress",
 
     "BalanceOf": "Balance",
     "QuorumOf": "Quorum",
