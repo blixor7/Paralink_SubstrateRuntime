@@ -30,20 +30,20 @@ pub const MAX_VALID_PERIOD: u32 = 100;
 pub const QUORUM_CREATION_FEE: u32 = 1;
 
 
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-pub type QuorumOf<T> = Quorum<<T as system::Trait>::AccountId, BalanceOf<T>>;
+pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type QuorumOf<T> = Quorum<<T as system::Config>::AccountId, BalanceOf<T>>;
 pub type RequestOf<T> = Request<
-	<T as system::Trait>::AccountId,
+	<T as system::Config>::AccountId,
 	BalanceOf<T>,
-	<T as system::Trait>::BlockNumber,
+	<T as system::Config>::BlockNumber,
 >;
 /// Currently supported answer type
 pub type Answer = i64;
 pub type QuorumIndex = u32;
 pub type RequestIndex = u32;
 
-pub trait Trait: balances::Trait + system::Trait {
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+pub trait Config: balances::Config + system::Config {
+	type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 	/// Native currency used for fees and rewards
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 }
@@ -154,7 +154,7 @@ pub struct Request<AccountId, BalanceOf, BlockNumber> {
 
 
 decl_storage! {
-	trait Store for Module<T: Trait> as RelayerQuorums {
+	trait Store for Module<T: Config> as RelayerQuorums {
 		/// Number of existing quorums. Also used as a hashmap index.
 		QuorumCount get(fn quorum_count): QuorumIndex;
 
@@ -177,9 +177,9 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T>
 	where
-		AccountId = <T as system::Trait>::AccountId,
+		AccountId = <T as system::Config>::AccountId,
 		Balance = BalanceOf<T>,
-		BlockNumber = <T as system::Trait>::BlockNumber,
+		BlockNumber = <T as system::Config>::BlockNumber,
 		{
 			QuorumCreated(QuorumIndex, AccountId),
 			RelayerAdded(QuorumIndex, AccountId),
@@ -194,7 +194,7 @@ decl_event!(
 );
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		NotRelayer,
 		NotUser,
 		AlreadyRelayer,
@@ -209,7 +209,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
 		type Error = Error<T>;
@@ -223,10 +223,10 @@ decl_module! {
 
 			// Burn a quorum creation fee
 			let fee = BalanceOf::<T>::from(QUORUM_CREATION_FEE);
-			if fee > BalanceOf::<T>::from(0) {
+			if fee > BalanceOf::<T>::from(0 as u32) {
 				T::Currency::withdraw(
 					&who, fee,
-					WithdrawReasons::none(),
+					WithdrawReasons::FEE,
 					ExistenceRequirement::KeepAlive)?;
 			}
 
@@ -245,7 +245,7 @@ decl_module! {
 				relayers: vec![],
 				balances: vec![],
 				creator: who.clone(),
-				pending_rewards: 0.into(),
+				pending_rewards: (0 as u32).into(),
 				min_fee,
 				membership,
 			});
@@ -277,7 +277,7 @@ decl_module! {
 				Err(index) => {
 					// TODO: trigger pending rewards distribution
 					quorum.relayers.insert(index, relayer.clone());
-					quorum.balances.insert(index, 0.into());
+					quorum.balances.insert(index, (0 as u32).into());
 					// Upsert the quorum
 					<Quorums<T>>::insert(&quorum_id, quorum);
 					Self::deposit_event(RawEvent::RelayerAdded(quorum_id, relayer));
@@ -298,7 +298,7 @@ decl_module! {
 
 			// TODO: trigger pending rewards distribution
 			let balance = quorum.balances.get(index).unwrap();
-			if *balance > BalanceOf::<T>::from(0) {
+			if *balance > BalanceOf::<T>::from(0 as u32) {
 				T::Currency::deposit_into_existing(&who, *balance)?;
 			}
 			quorum.relayers.remove(index);
@@ -317,7 +317,7 @@ decl_module! {
 
 			// TODO: trigger pending rewards distribution
 			let balance = quorum.balances.get(index).unwrap();
-			if *balance > BalanceOf::<T>::from(0) {
+			if *balance > BalanceOf::<T>::from(0 as u32) {
 				T::Currency::deposit_into_existing(&who, *balance)?;
 			}
 			quorum.relayers.remove(index);
@@ -395,10 +395,10 @@ decl_module! {
 
 			// pay the fee
 			ensure!(fee >= quorum.min_fee, Error::<T>::ValueError);
-			if fee > BalanceOf::<T>::from(0) {
+			if fee > BalanceOf::<T>::from(0 as u32) {
 				T::Currency::withdraw(
 					&user, fee,
-					WithdrawReasons::none(),
+					WithdrawReasons::FEE,
 					ExistenceRequirement::KeepAlive)?;
 			}
 
@@ -473,7 +473,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
 	/// Find a request
 	pub fn find_request(request_id: RequestIndex) ->
