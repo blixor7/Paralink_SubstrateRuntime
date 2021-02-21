@@ -20,7 +20,7 @@ build:
 
 .PHONY: watch
 watch:
-	cargo watch -c -x build
+	SKIP_WASM_BUILD=1 cargo watch -c -x build
 
 .PHONY: doc
 doc:
