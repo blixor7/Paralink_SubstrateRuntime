@@ -1,6 +1,6 @@
 ![](https://paralink.network/images/logo-sm-home.png)
 
-## Getting Started
+## Getting  Started
 
 This repository contains Substrate based runtime for Paralink Network.
 
