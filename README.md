@@ -1,74 +1,90 @@
 ![](https://paralink.network/images/logo-sm-home.png)
 
-## Getting  Started
+# Paralink Network Substrate Runtime
 
-This repository contains Substrate based runtime for Paralink Network.
+This repository contains the **Substrate-based runtime** for the Paralink Network.
 
-### Makefile
+---
 
-This project uses a [Makefile](Makefile) to document helpful commands and make it easier to execute them.
+## Quick Start
 
-1. `make init` - Run the [init script](scripts/init.sh) to configure the Rust toolchain for
-   [WebAssembly compilation](https://substrate.dev/docs/en/knowledgebase/getting-started/#webassembly-compilation).
-1. `make run` - Build and launch this project in development mode.
+This project uses a **Makefile** to simplify common tasks like building and running the node.
 
-### Build
+### Setup
 
-The `make run` command will perform an initial build. Use the following command to build the node without launching it:
+Install and configure the Rust toolchain for **WebAssembly compilation**:
 
-```sh
+```bash
+make init
+```
+
+### Build & Run
+
+* **Build only:** Compile the node without launching it:
+
+```bash
 make build
 ```
 
-### Embedded Docs
+* **Run in development mode:** Launch a temporary node (state will be discarded when stopped):
 
-Once the project has been built, the following command can be used to explore all parameters and subcommands:
+```bash
+make run
+```
 
-```sh
+### Explore Commands
+
+After building, check all available parameters and subcommands:
+
+```bash
 ./target/release/paralink-node -h
 ```
 
-## Run
+---
 
-The `make run` command will launch a temporary node and its state will be discarded after you terminate the process. After the project has been built, there are other ways to launch the node.
+## Running the Node
 
 ### Single-Node Development Chain
 
-This command will start the single-node development chain with persistent state:
+Start a single-node chain with **persistent state**:
 
 ```bash
 ./target/release/paralink-node --dev
 ```
 
-Purge the development chain's state:
+Reset the chain state if needed:
 
 ```bash
 ./target/release/paralink-node purge-chain --dev
 ```
 
-Start the development chain with detailed logging:
+Enable **detailed logging** for debugging:
 
 ```bash
 RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/paralink-node -lruntime=debug --dev
 ```
 
-### Run in Docker
+---
 
-Then run the following command to start a single node development chain.
+### Running with Docker
+
+Use the included script to run the node inside a Docker container:
 
 ```bash
 ./scripts/docker_run.sh
 ```
 
-This command will firstly compile your code, and then start a local development network. You can also replace the default command (`cargo build --release && ./target/release/paralink-node --dev --ws-external`) by appending your own. A few useful ones are as follow.
+By default, this will **compile the code** and launch a local development network. You can also customize commands:
 
 ```bash
-# Run Substrate node without re-compiling
+# Run the node without recompiling
 ./scripts/docker_run.sh ./target/release/paralink-node --dev --ws-external
 
-# Purge the local dev chain
+# Purge local development chain
 ./scripts/docker_run.sh ./target/release/paralink-node purge-chain --dev
 
-# Check whether the code is compilable
+# Check compilation without building
 ./scripts/docker_run.sh cargo check
 ```
+
+
