@@ -1,11 +1,3 @@
-![](https://paralink.network/images/logo-sm-home.png)
-
-# Paralink Network Substrate Runtime
-
-This repository contains the **Substrate-based runtime** for the Paralink Network.
-
----
-
 ## Quick Start
 
 This project uses a **Makefile** to simplify common tasks like building and running the node.
